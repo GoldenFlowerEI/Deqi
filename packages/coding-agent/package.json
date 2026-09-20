@@ -27,7 +27,6 @@
   "dependencies": {
     "@deqi/ai": "workspace:*",
     "@deqi/agent-core": "workspace:*",
-    "@deqi/tui": "workspace:*",
     "@deqi/introspection": "workspace:*"
   },
   "devDependencies": {

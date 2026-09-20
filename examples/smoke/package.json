@@ -38,7 +38,6 @@
     "@deqi/ai": "workspace:*",
     "@deqi/agent-core": "workspace:*",
     "@deqi/coding-agent": "workspace:*",
-    "@deqi/introspection": "workspace:*",
-    "@deqi/tui": "workspace:*"
+    "@deqi/introspection": "workspace:*"
   }
 }
