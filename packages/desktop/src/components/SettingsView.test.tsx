@@ -6,24 +6,24 @@ import { describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { SettingsView } from './SettingsView';
+import { APP_VERSION, DESKTOP_ID } from '../lib/identity';
 import type { ModelInfo, ServerConfig } from '../lib/types';
 
 const baseConfig: ServerConfig = {
-  version: 1,
   default_model: 'MiniMax-M3',
   permission_mode: 'smart',
   show_surprise: true,
   enable_reflection: false,
   providers: {
-    anthropic: { has_key: true, key_tail: 'xyz1', base_url: null },
+    anthropic: { has_key: true, key_tail: 'xyz1', base_url: undefined },
     'openai-compat': { has_key: false, key_tail: null, base_url: 'https://example.com/v1' },
   },
 };
 
 const baseModels: ModelInfo[] = [
-  { id: 'MiniMax-M3', provider: 'MiniMax' },
-  { id: 'claude-sonnet-4-5', provider: 'anthropic' },
-  { id: 'gpt-5', provider: 'openai' },
+  { id: 'MiniMax-M3', provider: 'MiniMax', context_window: 200000, max_output_tokens: 8192, cost: { input: 1, output: 2 } },
+  { id: 'claude-sonnet-4-5', provider: 'anthropic', context_window: 200000, max_output_tokens: 8192, cost: { input: 3, output: 15 } },
+  { id: 'gpt-5', provider: 'openai', context_window: 128000, max_output_tokens: 16384, cost: { input: 2, output: 8 } },
 ];
 
 function makeApi() {
@@ -51,6 +51,20 @@ describe('SettingsView', () => {
     // Use the <code> tag (not the prose mention in the intro).
     expect(screen.getAllByText(/~?\/.deqi\/config\.json/).length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText(/~?\/.deqi\/sessions/).length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('shows APP_VERSION (not a hardcoded literal) in the About section', () => {
+    // v0.2 regression test: previously rendered "3.9.0 (desktop)"
+    // regardless of the actual bundle version. Lock the value
+    // against the single source of truth in identity.ts.
+    renderSettings();
+    expect(screen.getByText(new RegExp(APP_VERSION))).toBeInTheDocument();
+    expect(screen.queryByText(/3\.9\.0/)).not.toBeInTheDocument();
+  });
+
+  it('shows the per-install DESKTOP_ID', () => {
+    renderSettings();
+    expect(screen.getByText(new RegExp(DESKTOP_ID))).toBeInTheDocument();
   });
 
   it('lists all models in the Default dropdown', () => {

@@ -123,14 +123,14 @@ describe('DeqiWebSocket', () => {
     const ws = new DeqiWebSocket({}, 'ws://test/v1/chat');
     ws.connect();
     // not opened yet — no socket with readyState=OPEN
-    expect(() => ws.send({ type: 'list_sessions' } as WsClientMessage)).toThrow(/not open/);
+    expect(() => ws.send({ type: 'abort', session_id: 's1' } as WsClientMessage)).toThrow(/not open/);
   });
 
   it('send enqueues the message when open', () => {
     const ws = new DeqiWebSocket({}, 'ws://test/v1/chat');
     ws.connect();
     StubWebSocket.instances[0].fireOpen();
-    ws.send({ type: 'list_sessions' } as WsClientMessage);
+    ws.send({ type: 'abort', session_id: 's1' } as WsClientMessage);
     const sock = StubWebSocket.instances[0];
     expect(sock.sent.length).toBeGreaterThanOrEqual(2); // hello + our msg
   });

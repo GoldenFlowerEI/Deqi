@@ -10,15 +10,17 @@ import type { SearchResponse } from '../lib/types';
 
 const sampleResp: SearchResponse = {
   query: 'hello',
+  total: 1,
   results: [
     {
       sessionId: 'sess-abc',
-      createdAt: new Date().toISOString(),
+      cwd: 'C:/projects/x',
       model: 'MiniMax-M3',
+      createdAt: new Date().toISOString(),
       hitCount: 2,
       hits: [
-        { role: 'user', snippet: 'say hello world' },
-        { role: 'assistant', snippet: 'hello there!' },
+        { role: 'user', snippet: 'say hello world', ts: '2026-09-19T10:00:00Z' },
+        { role: 'assistant', snippet: 'hello there!', ts: '2026-09-19T10:00:01Z' },
       ],
     },
   ],
@@ -85,7 +87,7 @@ describe('SearchView', () => {
   });
 
   it('shows "no matches" when results are empty', async () => {
-    renderSearch('', makeApi({ query: 'zzz', results: [] }));
+    renderSearch('', makeApi({ query: 'zzz', total: 0, results: [] }));
     await userEvent.type(screen.getByPlaceholderText(/Search messages/), 'zzz');
     await waitFor(() => expect(screen.getByText(/No matches for "zzz"/)).toBeInTheDocument());
   });

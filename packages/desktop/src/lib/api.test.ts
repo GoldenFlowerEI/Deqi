@@ -150,4 +150,75 @@ describe('DeqiApi', () => {
     await api.listModels();
     expect(lastCall().url).toBe('http://127.0.0.1:7700/v1/models');
   });
+
+  it('getSession GETs /v1/sessions/:id', async () => {
+    (fetch as any).mockResolvedValue(okResponse({ session: { id: 's1' } }));
+    await api.getSession('s1');
+    expect(lastCall().url).toBe('http://127.0.0.1:7700/v1/sessions/s1');
+  });
+
+  it('getSessionMessages GETs /v1/sessions/:id/messages', async () => {
+    (fetch as any).mockResolvedValue(okResponse({ messages: [] }));
+    await api.getSessionMessages('s2');
+    expect(lastCall().url).toBe('http://127.0.0.1:7700/v1/sessions/s2/messages');
+  });
+
+  it('getConfig GETs /v1/config', async () => {
+    (fetch as any).mockResolvedValue(okResponse({ default_model: 'm', version: 1 }));
+    const cfg = await api.getConfig();
+    expect(cfg).toEqual({ default_model: 'm', version: 1 });
+    expect(lastCall().url).toBe('http://127.0.0.1:7700/v1/config');
+  });
+
+  it('listSchedule GETs /v1/schedule', async () => {
+    (fetch as any).mockResolvedValue(okResponse({ items: [] }));
+    await api.listSchedule();
+    expect(lastCall().url).toBe('http://127.0.0.1:7700/v1/schedule');
+  });
+
+  it('createSchedule POSTs the full input', async () => {
+    (fetch as any).mockResolvedValue(okResponse({ item: { id: 'sch_1' } }));
+    await api.createSchedule({
+      name: 'nightly', prompt: 'audit',
+      cadence: 'daily',
+      enabled: true,
+    });
+    const c = lastCall();
+    expect(c.url).toBe('http://127.0.0.1:7700/v1/schedule');
+    expect(c.method).toBe('POST');
+    expect(c.body).toEqual({
+      name: 'nightly', prompt: 'audit',
+      cadence: 'daily',
+      enabled: true,
+    });
+  });
+
+  it('updateSchedule PATCHes /v1/schedule/:id', async () => {
+    (fetch as any).mockResolvedValue(okResponse({ item: { id: 'sch_1' } }));
+    await api.updateSchedule('sch_1', { enabled: false });
+    const c = lastCall();
+    expect(c.url).toBe('http://127.0.0.1:7700/v1/schedule/sch_1');
+    expect(c.method).toBe('PATCH');
+    expect(c.body).toEqual({ enabled: false });
+  });
+
+  it('listPairs GETs /v1/pair', async () => {
+    (fetch as any).mockResolvedValue(okResponse({ items: [] }));
+    await api.listPairs();
+    expect(lastCall().url).toBe('http://127.0.0.1:7700/v1/pair');
+  });
+
+  it('deletePair DELETEs /v1/pair/:id', async () => {
+    (fetch as any).mockResolvedValue(okResponse({ ok: true, id: 'p1' }));
+    await api.deletePair('p1');
+    const c = lastCall();
+    expect(c.url).toBe('http://127.0.0.1:7700/v1/pair/p1');
+    expect(c.method).toBe('DELETE');
+  });
+
+  it('putProvider URL-encodes the provider name', async () => {
+    (fetch as any).mockResolvedValue(okResponse({ config: {} }));
+    await api.putProvider('openai compat', { baseUrl: 'https://x/v1' });
+    expect(lastCall().url).toBe('http://127.0.0.1:7700/v1/config/providers/openai%20compat');
+  });
 });

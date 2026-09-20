@@ -17,6 +17,7 @@
 
 import { useState } from 'react';
 import { DeqiApi } from '../lib/api';
+import { APP_VERSION, DESKTOP_ID } from '../lib/identity';
 import type {
   ModelInfo,
   PermissionMode,
@@ -326,7 +327,15 @@ export function SettingsView({ api, config, models, onConfigChange }: Props) {
         <h3>About</h3>
         <div className="settings-row">
           <span className="settings-label">Deqi version</span>
-          <code>3.9.0 (desktop)</code>
+          {/* v0.2: pull from identity.ts so the displayed version
+              tracks the actual bundle. Previously hardcoded
+              "3.9.0 (desktop)" — lied about the version on every
+              release past v3.9. */}
+          <code>{APP_VERSION} (desktop)</code>
+        </div>
+        <div className="settings-row">
+          <span className="settings-label">Desktop ID</span>
+          <code>{DESKTOP_ID}</code>
         </div>
         <div className="settings-row">
           <span className="settings-label">Config file</span>

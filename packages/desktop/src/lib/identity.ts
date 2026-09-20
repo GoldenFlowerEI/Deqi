@@ -1,8 +1,10 @@
 /**
- * v5.1: identity constants used for telemetry + feedback + cluster registration.
+ * Deqi identity constants used for telemetry + feedback + cluster registration.
  *
  * APP_VERSION: a single source of truth for the desktop bundle version.
  * Bumped in the same commit as the Cargo.toml / tauri.conf.json version.
+ * The string is also surfaced in the Settings → About panel, so changing
+ * it changes what users see.
  *
  * DESKTOP_ID: a stable per-install id. Generated once and stored in
  * `localStorage` so it survives reloads but is per-browser-profile.
@@ -25,7 +27,9 @@ function generateHex(bytes: number): string {
   return out;
 }
 
-export const APP_VERSION = 'v5.1.0';
+// v0.2: bumped from legacy "v5.1.0" (pre-rebrand from GFEI). The Deqi
+// release train is 0.x; we'll switch to 1.0 once we have a stable API.
+export const APP_VERSION = 'v0.2.0';
 
 export function getDesktopId(): string {
   let id = localStorage.getItem(ID_STORAGE_KEY);

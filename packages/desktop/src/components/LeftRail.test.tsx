@@ -165,4 +165,15 @@ describe('LeftRail', () => {
     expect(screen.getByText(/Deqi/i)).toBeInTheDocument();
     expect(screen.getByText(/desktop/i)).toBeInTheDocument();
   });
+
+  it('footer version uses APP_VERSION (not a hardcoded literal)', async () => {
+    // v0.2 regression test: the rail used to render "v3.9 · desktop"
+    // regardless of the actual bundle version. Lock the value
+    // against the single source of truth in identity.ts (same
+    // approach as SettingsView → About).
+    const { APP_VERSION } = await import('../lib/identity');
+    renderRail();
+    expect(screen.getByText(new RegExp(APP_VERSION))).toBeInTheDocument();
+    expect(screen.queryByText(/v3\.9/)).not.toBeInTheDocument();
+  });
 });

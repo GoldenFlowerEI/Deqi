@@ -24,6 +24,7 @@
  */
 
 import { useEffect, useState } from 'react';
+import { APP_VERSION } from '../lib/identity';
 
 export type RailView =
   | 'chat'
@@ -181,7 +182,8 @@ export function LeftRail({
 
       <div className="rail-footer">
         <div className="rail-footer-title">Deqi</div>
-        <div className="rail-footer-sub">v3.9 · desktop</div>
+        {/* v0.2: same APP_VERSION as Settings → About. */}
+        <div className="rail-footer-sub">{APP_VERSION} · desktop</div>
       </div>
     </aside>
   );

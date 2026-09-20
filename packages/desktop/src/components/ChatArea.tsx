@@ -100,9 +100,14 @@ function BlockView({ block }: { block: Block }) {
     );
   }
   if (block.kind === 'thinking') {
+    // v0.2: useMemoBlocks populates thinking text into `block.text`,
+    // not `block.thinking` (which is a stale optional field on the
+    // Block interface). Reading `block.text` shows the actual
+    // reasoning; the `thinking…` placeholder only shows when both
+    // are empty (e.g. an open streaming block).
     return (
       <div className="msg msg-thinking">
-        💭 {block.thinking || 'thinking…'}
+        💭 {block.text || 'thinking…'}
       </div>
     );
   }

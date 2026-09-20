@@ -74,7 +74,7 @@ describe('ChatArea', () => {
     expect(screen.getByText('hello there friend')).toBeInTheDocument();
   });
 
-  it('renders a thinking block', () => {
+  it('renders a thinking block with the actual reasoning text', () => {
     const { container } = render(
       <ChatArea
         events={[
@@ -85,14 +85,28 @@ describe('ChatArea', () => {
         busy={false}
       />,
     );
-    // NOTE: ChatArea.tsx renders the thinking text via `block.thinking`
-    // (currently undefined — the populator sets `block.text`). This
-    // is a real bug in the renderer that we'll fix in v0.2; the
-    // assertion below documents the gap rather than passing it.
+    // v0.2 fix: the renderer used to read block.thinking (always
+    // undefined, since useMemoBlocks writes block.text). It now
+    // reads block.text, so the actual reasoning string surfaces.
     const thinkingBlock = container.querySelector('.msg-thinking');
     expect(thinkingBlock).toBeInTheDocument();
     expect(thinkingBlock?.textContent).toContain('💭');
+    expect(thinkingBlock?.textContent).toContain('reasoning step');
     expect(screen.getByText('answer')).toBeInTheDocument();
+  });
+
+  it('falls back to the "thinking…" placeholder when the text is empty', () => {
+    const { container } = render(
+      <ChatArea
+        events={[
+          ev({ type: 'text_delta', delta: 'no thinking yet' } as any),
+        ]}
+        userPrompts={['q']}
+        busy={false}
+      />,
+    );
+    // No thinking_delta was emitted, so no thinking block exists.
+    expect(container.querySelector('.msg-thinking')).not.toBeInTheDocument();
   });
 
   it('renders a tool block with input + output + duration', () => {
