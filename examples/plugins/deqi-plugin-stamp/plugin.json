@@ -1,0 +1,11 @@
+{
+  "name": "deqi-plugin-stamp",
+  "version": "0.1.0",
+  "description": "No-op example plugin that demonstrates the event subscription path. On every turn_end, logs the wall-clock duration of the turn. Useful as a smoke test for plugin:on.",
+  "main": "index.mjs",
+  "tools": [],
+  "author": "Deqi",
+  "permissions": {
+    "capabilities": ["plugin:on", "plugin:emit"]
+  }
+}

@@ -1,0 +1,22 @@
+[
+  {
+    "name": "commit-message",
+    "description": "Generate a conventional-commit message from the staged diff.",
+    "body": "# commit-message\n\nGenerate a `type(scope): summary` conventional-commit message from the current `git diff --staged`.\n\nSteps:\n1. Run `git diff --staged --stat` to see what's in this commit.\n2. Run `git diff --staged` to see the full diff.\n3. Classify: feat | fix | refactor | docs | test | chore | build | ci | perf | style.\n4. Pick a `scope` from the touched paths (or omit if cross-cutting).\n5. Write a one-line summary (50 chars max, no period) and a wrapped body explaining WHY.\n6. Show the message to the user, then run `git commit -F-` with the message on stdin (after explicit OK).\n\nEdge cases:\n- Empty staged diff → say so, ask what to stage.\n- Multiple unrelated changes → suggest splitting into multiple commits.\n- Breaking change → add `BREAKING CHANGE:` footer with a migration note.\n"
+  },
+  {
+    "name": "release",
+    "description": "Cut a release: bump version, update CHANGELOG, tag, push, post a release note.",
+    "body": "# release\n\nCut a release: bump version, update CHANGELOG.md, create a git tag, push to remote, post a release note.\n\nSteps:\n1. Confirm the release version with the user. Default: bump the minor version (X.Y.Z → X.(Y+1).0).\n2. Find every package.json in the repo and bump the version field. Use `edit`, not `write`.\n3. Update CHANGELOG.md: add a new section with the bumped version, today's date, and a bullet list of commits since the last tag (`git log v<prev>..HEAD --oneline`).\n4. Run `git add -A && git commit -m 'release: v<X.Y.Z>'`.\n5. Run `git tag -a v<X.Y.Z> -m 'v<X.Y.Z>'`.\n6. Run `git push --follow-tags`.\n7. If a Slack/Discord webhook is configured, post a release note. Otherwise just report the new version + tag to the user.\n\nEdge cases:\n- Uncommitted changes → commit them first or ask.\n- Detached HEAD → ask the user which branch to release from.\n- Existing tag at the same version → bump again.\n"
+  },
+  {
+    "name": "test",
+    "description": "Detect the test command, run it, and report pass/fail counts.",
+    "body": "# test\n\nDetect and run the project's test suite. Report pass/fail counts and surface failures.\n\nSteps:\n1. Detect: read package.json `scripts.test` (Node), look for pytest/tox/nox (Python), look for `go test ./...`, `cargo test`, `make test`, etc.\n2. If nothing detected, ask the user which test command to run.\n3. Run the command with `bash`. Use a 5-minute timeout for fast suites, 30-minute for full.\n4. Parse the output for pass/fail counts (most runners print them).\n5. If there are failures, capture the first 5 in full and summarize the rest.\n6. Report: total, pass, fail, skip, duration, and the top 5 failure signatures.\n\nEdge cases:\n- No test framework detected → say so and suggest a setup.\n- Tests crash the runner → report the crash separately from test failures.\n- Long output → tail the last 200 lines + the first 20 lines.\n"
+  },
+  {
+    "name": "lint",
+    "description": "Run the project's linter and apply auto-fixes when possible.",
+    "body": "# lint\n\nRun the project's linter and apply auto-fixes for safe rules.\n\nSteps:\n1. Detect: read package.json for eslint/biome/prettier, look for .ruff.toml / pyproject.toml [tool.ruff], .golangci.yml, etc.\n2. Run the lint command. For ESLint/Biome, prefer `lint --fix` so safe fixes are auto-applied.\n3. For each remaining error, summarize the file:line and the rule, then ask the user before manually editing.\n4. If no errors: report the run was clean and stop.\n5. If errors: offer to fix them one by one. Don't mass-edit without explicit OK.\n\nEdge cases:\n- No linter configured → suggest installing one (biome is the fastest).\n- Lint command fails to even start (missing dep) → report the missing dep.\n- Hundreds of errors → batch them by rule and offer a per-rule fix plan instead of one-by-one.\n"
+  }
+]

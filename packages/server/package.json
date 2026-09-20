@@ -1,0 +1,28 @@
+{
+  "name": "@deqi/server",
+  "version": "0.1.0",
+  "description": "Deqi HTTP + WebSocket server — wraps agent-core for the desktop app",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "deqi-server": "./bin/deqi-server.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx watch src/index.ts",
+    "start": "node ./bin/deqi-server.js",
+    "test": "node --test dist/__tests__/*.test.js"
+  },
+  "dependencies": {
+    "@deqi/agent-core": "workspace:*",
+    "@deqi/ai": "workspace:*",
+    "@deqi/coding-agent": "workspace:*",
+    "@deqi/introspection": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}

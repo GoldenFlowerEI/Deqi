@@ -1,0 +1,11 @@
+{
+  "name": "deqi-plugin-http-fetch",
+  "version": "0.1.0",
+  "description": "A safe HTTP fetch tool. Adds `http_get` (URL allowlist) and a /v1/plugin/http-fetch/ping route. Only works against an explicit allowlist of hostnames — SSRF and private-IP blocking is the whole point.",
+  "main": "index.mjs",
+  "tools": ["http_get"],
+  "author": "Deqi",
+  "permissions": {
+    "capabilities": ["network"]
+  }
+}

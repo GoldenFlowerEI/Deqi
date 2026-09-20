@@ -1,0 +1,8 @@
+{
+  "name": "deqi-plugin-hello",
+  "version": "0.1.0",
+  "description": "Example plugin — registers a `hello` tool",
+  "main": "index.mjs",
+  "tools": ["hello"],
+  "author": "deqi team"
+}

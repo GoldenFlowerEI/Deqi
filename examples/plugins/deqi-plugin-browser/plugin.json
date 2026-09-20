@@ -1,0 +1,11 @@
+{
+  "name": "deqi-plugin-browser",
+  "version": "0.1.0",
+  "description": "Real headless browser via Microsoft Edge --headless flag. Adds browser_navigate (HTML body), browser_screenshot (PNG file), and a /v1/plugin/browser/health route. Uses Edge's built-in headless mode — no npm deps.",
+  "main": "index.mjs",
+  "tools": ["browser_navigate", "browser_screenshot"],
+  "author": "Deqi",
+  "permissions": {
+    "capabilities": ["subprocess", "fs:read", "fs:write"]
+  }
+}

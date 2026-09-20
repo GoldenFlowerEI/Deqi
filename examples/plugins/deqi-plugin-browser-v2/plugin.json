@@ -1,0 +1,11 @@
+{
+  "name": "deqi-plugin-browser-v2",
+  "version": "0.1.0",
+  "description": "Real headless browser INTERACTION (v4.5) via Chrome DevTools Protocol over WebSocket. Adds browser_navigate, browser_click, browser_type, browser_wait, browser_screenshot. Zero npm deps — uses Node 22's built-in WebSocket + system Edge --remote-debugging-port.",
+  "main": "index.mjs",
+  "tools": ["browser_navigate", "browser_click", "browser_type", "browser_wait", "browser_screenshot"],
+  "author": "Deqi",
+  "permissions": {
+    "capabilities": ["subprocess", "fs:read", "fs:write"]
+  }
+}

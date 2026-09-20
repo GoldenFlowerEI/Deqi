@@ -1,0 +1,26 @@
+# Example recipe: smoke test the current project.
+# Run with: deqi run-recipe ./examples/recipes/smoke-test.yaml
+# Or via the agent's recipe_run tool.
+name: smoke-test
+description: A 4-step smoke test. Greps for TODOs, runs the test suite, reads the latest log, and writes a summary.
+
+steps:
+  - name: find TODOs in src
+    tool: grep
+    args:
+      pattern: TODO
+      path: src
+  - name: run the test suite
+    tool: bash
+    args:
+      command: bun run test
+      timeout: 120000
+  - name: tail the dev log
+    tool: bash
+    args:
+      command: tail -n 50 scripts/dev.log
+  - name: write a summary
+    tool: write
+    args:
+      path: .deqi/recipes/smoke-summary.md
+      content: "# Smoke test summary\n\nSee above for results.\n"

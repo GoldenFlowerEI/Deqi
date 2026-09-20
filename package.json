@@ -1,0 +1,34 @@
+{
+  "name": "deqi",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Deqi — Golden Flower Emergent Intelligence. Desktop app (v2) + TUI (v1).",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "workspaces": [
+    "packages/*",
+    "examples/*"
+  ],
+  "scripts": {
+    "build": "bun run scripts/build-all.mjs",
+    "test": "cd examples/smoke && bun run all",
+    "typecheck": "bun run scripts/build-all.mjs --noEmit",
+    "lint": "echo no lint yet",
+    "clean": "bun run scripts/clean-all.mjs",
+    "server": "node packages/server/dist/index.js",
+    "icons": "node scripts/gen-deqi-icons.mjs",
+    "binary:server": "bun build --compile --target=bun-windows-x64 --outfile=binaries/deqi-server-x86_64-pc-windows-msvc.exe packages/server/dist/index.js",
+    "dev:desktop": "node scripts/dev-desktop.mjs",
+    "tauri": "node scripts/tauri.mjs",
+    "tauri:dev": "node scripts/tauri.mjs dev",
+    "tauri:build": "node scripts/tauri.mjs build"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "typescript": "^5.4.0",
+    "bun-types": "latest"
+  }
+}

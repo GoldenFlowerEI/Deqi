@@ -1,0 +1,11 @@
+{
+  "name": "deqi-plugin-git",
+  "version": "0.1.0",
+  "description": "Adds git status / diff / log as agent tools, plus a /v1/plugin/git/health route that the desktop can call to show repo status.",
+  "main": "index.mjs",
+  "tools": ["git_status", "git_diff", "git_log"],
+  "author": "Deqi",
+  "permissions": {
+    "capabilities": ["subprocess", "fs:read"]
+  }
+}

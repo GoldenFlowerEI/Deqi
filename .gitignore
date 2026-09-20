@@ -1,0 +1,72 @@
+node_modules/
+dist/
+*.log
+.DS_Store
+.env
+.env.local
+.cache/
+*.tsbuildinfo
+.pnpm-store/
+.turbo/
+coverage/
+.deqi/
+deqi-sessions/
+
+# Detached Tauri build logs / pid file
+scripts/tauri-build.*
+Cargo.lock
+
+# Build output for the bun-compiled deqi-server sidecar.
+# Regenerated with `bun run binary:server`.
+binaries/
+
+# Local exploration scripts (debugging repros, dump-*, etc).
+dev/
+
+# Tauri 2 generated icon bytes (regenerate via `bun run icons`).
+packages/desktop/src-tauri/gen/
+
+# Live server log (we keep it on disk for debugging dev sessions).
+scripts/server.err
+scripts/server.log
+scripts/server.err
+scripts/vite.log
+scripts/vite.err
+scripts/deqi-desktop.log
+scripts/deqi-desktop.err
+# Old names from the pre-rebrand session (still floating around)
+scripts/gfei-desktop.log
+scripts/gfei-desktop.err
+
+# backups and stale folders from earlier scaffolding
+*.bak
+*.bak/
+_*.bak
+_*.bak/
+.introspect*
+.introspect*/
+.license-backup
+.license-backup/
+
+# v2.0: TUI/CLI are removed in v2.0; the *.disabled files
+# (packages/_tui.disabled/, packages/coding-agent/_modes.disabled/,
+# bin/deqi*.disabled, examples/smoke/*.disabled) are kept on disk
+# for git history reference but ignored from the tree.
+*.disabled
+*.disabled/
+**/_*.disabled/
+**/_*.disabled
+
+# --- Mavis session scratch (auto-added by deqi_migrate.py) ---
+# Per-run scratch files from Mavis sessions
+packages/server/.run*.md
+packages/server/.run*.py
+# Project state tracker files
+packages/server/Project-state*
+packages/server/progress_eof_*
+packages/server/reply.md
+packages/server/run-*.tmp
+packages/server/append-*.py
+packages/server/block-*.md
+packages/server/nul
+packages/server/.gfei-state/
