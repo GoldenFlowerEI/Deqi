@@ -34,9 +34,31 @@ export class ModelRegistry {
   private customModels: Model[] = [];
   private mockFactory: ((auth: { model?: string }) => StreamFunction) | null = null;
 
-  constructor(auth: ProviderAuth = {}, customModels: Model[] = []) {
+  /**
+   * @param auth provider credentials.
+   * @param customModels extra models to expose beyond KNOWN_MODELS.
+   * @param mockStreamOverride replace the bundled mock provider. Tests
+   *   need this: the shipped mock only ever emits text, so no test
+   *   could drive a real tool call through the agent loop — which is
+   *   why the permission gate, the tool executor and the reflection
+   *   hook had no end-to-end coverage. The alternative used to be
+   *   assigning the private `mockFactory` field right after
+   *   construction, which the constructor's own
+   *   `void this.loadMockFactory()` then silently overwrote on the
+   *   next microtask — the override appeared to work and the scripted
+   *   model never ran.
+   */
+  constructor(
+    auth: ProviderAuth = {},
+    customModels: Model[] = [],
+    mockStreamOverride?: (auth: { model?: string }) => StreamFunction,
+  ) {
     this.auth = auth;
     this.customModels = customModels;
+    if (mockStreamOverride) {
+      this.mockFactory = mockStreamOverride;
+      return;
+    }
     // Pre-load the mock provider at construction time. ESM
     // top-level await is fine here because by the time
     // ModelRegistry is constructed, the module graph is ready.

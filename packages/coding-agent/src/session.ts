@@ -21,7 +21,20 @@ import { homedir } from 'node:os';
  *   { "type": "label",       "id": "...", "parentId": "...", "label": "..." }
  */
 
-const Deqi_HOME = join(homedir(), '.deqi');
+/**
+ * v0.3: resolved per call, not captured at module load.
+ *
+ * `const Deqi_HOME = join(homedir(), '.deqi')` evaluated `homedir()`
+ * once, when the module was first imported. Anything that changed
+ * `process.env.HOME` afterwards — which every hermetic test does to
+ * keep sessions out of the developer's real profile — had no effect:
+ * the tests were writing JSONL into the real `~/.deqi/sessions`. A
+ * function keeps the lookup lazy so the override is honoured.
+ */
+function deqiHome(): string {
+  return join(homedir(), '.deqi');
+}
+
 
 export interface SessionHeader {
   type: 'session';
@@ -137,7 +150,7 @@ export class SessionManager {
   }
 
   static async create(cwd: string, model: string, provider: string): Promise<SessionManager> {
-    const dir = join(Deqi_HOME, 'sessions', encodeCwd(cwd));
+    const dir = join(deqiHome(), 'sessions', encodeCwd(cwd));
     await mkdir(dir, { recursive: true });
     const sessionId = createHash('sha1')
       .update(cwd + ':' + Date.now() + ':' + Math.random())
@@ -167,7 +180,7 @@ export class SessionManager {
   }
 
   static async list(cwd: string): Promise<Array<{ id: string; filePath: string; header: SessionHeader }>> {
-    const dir = join(Deqi_HOME, 'sessions', encodeCwd(cwd));
+    const dir = join(deqiHome(), 'sessions', encodeCwd(cwd));
     if (!existsSync(dir)) return [];
     const { readdir } = await import('node:fs/promises');
     const names = await readdir(dir);
@@ -186,6 +199,91 @@ export class SessionManager {
       }
     }
     return out.sort((a, b) => b.header.createdAt.localeCompare(a.header.createdAt));
+  }
+
+  /**
+   * v0.3: list every session across every project, newest first.
+   *
+   * `list(cwd)` needs a working directory, which is precisely what the
+   * server did not have: `handleGetSession` and
+   * `handleGetSessionMessages` both called it with `process.cwd()`,
+   * so a session created for project A could not be fetched while the
+   * server happened to be running in project B's directory.
+   *
+   * The directory names are `encodeCwd()` output, which is lossy
+   * (`C:\a\b` and `C-a-b` collapse to the same folder), so the
+   * directory is only used to FIND candidate files. The
+   * authoritative project comes from each session's own header, which
+   * stores the real `cwd` verbatim.
+   */
+  static async listAll(): Promise<Array<{ id: string; filePath: string; header: SessionHeader }>> {
+    const root = join(deqiHome(), 'sessions');
+    if (!existsSync(root)) return [];
+    const fsp = await import('node:fs/promises');
+    let projectDirs: Array<{ name: string; isDirectory(): boolean }>;
+    try {
+      projectDirs = await fsp.readdir(root, { withFileTypes: true });
+    } catch {
+      return [];
+    }
+    const out: Array<{ id: string; filePath: string; header: SessionHeader }> = [];
+    for (const pd of projectDirs) {
+      if (!pd.isDirectory() || pd.name.startsWith('.')) continue;
+      const dir = join(root, pd.name);
+      let names: string[];
+      try {
+        names = await fsp.readdir(dir);
+      } catch {
+        continue;
+      }
+      for (const n of names) {
+        if (!n.endsWith('.jsonl')) continue;
+        const full = join(dir, n);
+        try {
+          // Read only the header line rather than parsing the whole
+          // session: listing must stay cheap even for a long session.
+          const text = await fsp.readFile(full, 'utf8');
+          const header = JSON.parse(text.split('\n')[0] ?? '') as SessionHeader;
+          if (header?.type === 'session' && typeof header.id === 'string') {
+            out.push({ id: header.id, filePath: full, header });
+          }
+        } catch {
+          // skip broken or unreadable
+        }
+      }
+    }
+    return out.sort((a, b) => b.header.createdAt.localeCompare(a.header.createdAt));
+  }
+
+  /**
+   * v0.3: find a session by id across all projects and return it with
+   * its own recorded `cwd`. Returns null when no session has that id.
+   *
+   * This is what lets the server stop guessing `process.cwd()`: the
+   * session file is the record of which project it belongs to.
+   */
+  static async findById(id: string): Promise<{
+    sm: SessionManager; header: SessionHeader; filePath: string;
+  } | null> {
+    for (const s of await SessionManager.listAll()) {
+      if (s.id !== id) continue;
+      try {
+        const sm = await SessionManager.load(s.filePath);
+        return { sm, header: s.header, filePath: s.filePath };
+      } catch {
+        continue;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * v0.3: the working directory a session belongs to, read from its
+   * own header. `null` when the session id is unknown.
+   */
+  static async cwdFor(id: string): Promise<string | null> {
+    const found = await SessionManager.findById(id);
+    return found?.header.cwd ?? null;
   }
 
   private async loadFromDisk(): Promise<void> {

@@ -33,9 +33,9 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import type { Socket } from 'node:net';
 import { randomUUID, createHash } from 'node:crypto';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { homedir } from 'node:os';
-import { existsSync } from 'node:fs';
+import { existsSync, statSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { ModelRegistry } from '@deqi/ai';
 import { ClusterRegistry } from './cluster-registry.js';
@@ -692,15 +692,55 @@ export class DeqiServer {
     this.json(res, { sessions });
   }
 
-  private async handleCreateSession(_req: IncomingMessage, res: ServerResponse, _url: URL): Promise<void> {
+  /**
+   * v0.3: decide which project a request operates on.
+   *
+   * The previous behaviour was `process.cwd()` in eight places. That
+   * is the directory the *server binary* was launched from, which has
+   * nothing to do with the project the user picked in the desktop: a
+   * session created for `D:\projects\api` was written under
+   * `~/.deqi/sessions/<server-launch-dir>/`, and `GET /v1/sessions/:id`
+   * could not find it at all unless the server happened to be running
+   * in that same directory.
+   *
+   * Resolution order, most trustworthy first:
+   *   1. the session's own header, which records the real cwd verbatim;
+   *   2. an explicit `cwd` from the request, validated to be a real
+   *      directory;
+   *   3. the server's launch directory, as a last resort.
+   */
+  private async resolveCwd(opts: { explicit?: string | null; sessionId?: string | null }): Promise<string> {
+    if (opts.sessionId) {
+      const fromSession = await SessionManager.cwdFor(opts.sessionId);
+      if (fromSession) return fromSession;
+    }
+    if (opts.explicit) {
+      const resolved = resolve(opts.explicit);
+      try {
+        if (statSync(resolved).isDirectory()) return resolved;
+      } catch {
+        // fall through
+      }
+    }
+    return process.cwd();
+  }
+
+  private async handleCreateSession(req: IncomingMessage, res: ServerResponse, _url: URL): Promise<void> {
     const cfg = loadConfig();
     const model = cfg?.defaultModel ?? 'MiniMax-M3';
-    const cwd = process.cwd();
+    // v0.3: honour a caller-supplied project. The desktop knows which
+    // folder the user is working in; the server used to ignore that and
+    // silently bind the session to its own launch directory.
+    const body = await this.readJson<{ cwd?: string }>(req);
+    const cwd = await this.resolveCwd({ explicit: body?.cwd });
     const session = await SessionManager.create(cwd, model, 'openai-compat');
     this.json(res, {
       session: {
         id: session.sessionId,
-        cwd: session.filePath,
+        // v0.3: was `session.filePath` — the JSONL's location, not the
+        // project. The desktop showed that path as the session's
+        // working directory.
+        cwd,
         model,
         provider: 'openai-compat',
         created_at: new Date().toISOString(),
@@ -714,8 +754,7 @@ export class DeqiServer {
 
   private async handleGetSession(id: string, res: ServerResponse): Promise<void> {
     try {
-      const cwd = process.cwd();
-      const all = await SessionManager.list(cwd);
+      const all = await SessionManager.listAll();
       const match = all.find((s) => s.id === id);
       if (!match) {
         this.json(res, { error: 'not_found' }, 404);
@@ -748,9 +787,11 @@ export class DeqiServer {
   }
 
   private async handleGetSessionMessages(id: string, res: ServerResponse): Promise<void> {
-    const cwd = process.cwd();
     try {
-      const all = await SessionManager.list(cwd);
+      // v0.3: search across every project. This used to scope the
+      // lookup to `process.cwd()`, so messages for a session created
+      // in any other folder returned 404.
+      const all = await SessionManager.listAll();
       const match = all.find((s) => s.id === id);
       if (!match) {
         this.json(res, { error: 'not_found' }, 404);
@@ -1031,6 +1072,9 @@ export class DeqiServer {
       model?: string;
       allowTools?: string[];
       parent_session_id?: string;
+      /** v0.3: the project to run against. Defaults to the server's
+       *  launch directory when absent. */
+      cwd?: string;
     } | null;
     if (!body || !body.prompt) {
       this.json(res, { error: 'missing_field', need: ['prompt'] }, 400);
@@ -1040,7 +1084,9 @@ export class DeqiServer {
     try {
       const cfg = loadConfig();
       const model = body.model ?? cfg?.defaultModel ?? 'MiniMax-M3';
-      const cwd = process.cwd();
+      // v0.3: honour the caller's project instead of the server's
+      // launch directory.
+      const cwd = await this.resolveCwd({ explicit: body.cwd });
       const session = await SessionManager.create(cwd, model, 'openai-compat');
       const runner = new AgentRunner(this.registry, session.sessionId, cwd, {
         cwd,
@@ -1219,7 +1265,12 @@ export class DeqiServer {
     if (!runner) {
       const cfg = loadConfig();
       const modelId = cfg?.defaultModel ?? 'MiniMax-M3';
-      const cwd = process.cwd();
+      // v0.3: the session's OWN recorded project. This is the fix for
+      // the central bug: an interactive turn used to run with
+      // cwd = the directory the server binary was launched from, so
+      // the agent read and edited the wrong tree no matter which
+      // project the user had open.
+      const cwd = await this.resolveCwd({ sessionId });
       runner = new AgentRunner(this.registry, sessionId, cwd, {
         cwd,
         model_id: modelId,
@@ -1270,7 +1321,9 @@ export class DeqiServer {
     try {
       const cfg = loadConfig();
       const model = cfg?.defaultModel ?? 'MiniMax-M3';
-      const cwd = process.cwd();
+      // v0.3: a scheduled run belongs to the project the schedule was
+      // created against, not to wherever the server was started.
+      const cwd = await this.resolveCwd({ explicit: (item as { cwd?: string }).cwd });
       const session = await SessionManager.create(cwd, model, 'openai-compat');
       const runner = new AgentRunner(this.registry, session.sessionId, cwd, {
         cwd,

@@ -274,7 +274,24 @@ async function main(): Promise<void> {
     const toolsRes = await fetch(`http://127.0.0.1:${port}/v1/tools`);
     const tools = (await toolsRes.json()) as { tools: Array<{ name: string }> };
     const toolNames = tools.tools.map((t) => t.name);
-    ok('GET /v1/tools lists 11 built-in tools', toolNames.length === 11, `got ${toolNames.length}: ${toolNames.join(',')}`);
+    // v0.3: this used to assert a hard-coded 11, written when the
+    // registry had 11 entries. Tools were added to 22 and the
+    // assertion kept passing in CI only because the `all` script
+    // chained with `;` and therefore never failed. It now compares
+    // against the real registry so it cannot drift again — a
+    // hard-coded count here is a tripwire for nothing.
+    const { BUILTIN_TOOLS } = await import('../../packages/coding-agent/dist/src/index.js');
+    ok(
+      `GET /v1/tools lists every built-in tool (${BUILTIN_TOOLS.length})`,
+      toolNames.length === BUILTIN_TOOLS.length,
+      `got ${toolNames.length}: ${toolNames.join(',')}`,
+    );
+    // The endpoint and the registry must agree on NAMES, not just the
+    // count — a rename that swaps one tool for another would pass a
+    // length check.
+    const missing = BUILTIN_TOOLS.map((t) => t.name).filter((n) => !toolNames.includes(n));
+    ok('GET /v1/tools names match the registry exactly', missing.length === 0,
+      missing.length ? `missing: ${missing.join(',')}` : '');
 
     const configRes = await fetch(`http://127.0.0.1:${port}/v1/config`);
     const config = (await configRes.json()) as { default_model: string };

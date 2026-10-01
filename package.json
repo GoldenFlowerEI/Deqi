@@ -14,9 +14,12 @@
   ],
   "scripts": {
     "build": "bun run scripts/build-all.mjs",
-    "test": "cd examples/smoke && bun run all",
+    "test": "bun run test:desktop ; bun run test:harness",
+    "test:desktop": "cd packages/desktop && bun run test --run",
+    "test:harness": "node examples/smoke/run-all.mjs",
+    "test:all": "node examples/smoke/run-all.mjs --all",
     "typecheck": "bun run scripts/build-all.mjs --noEmit",
-    "lint": "echo no lint yet",
+    "lint": "eslint .",
     "clean": "bun run scripts/clean-all.mjs",
     "server": "node packages/server/dist/index.js",
     "icons": "node scripts/gen-deqi-icons.mjs",
@@ -27,8 +30,11 @@
     "tauri:build": "node scripts/tauri.mjs build"
   },
   "devDependencies": {
+    "@eslint/js": "^9.13.0",
     "@types/node": "^20.10.0",
+    "eslint": "^9.13.0",
     "typescript": "^5.4.0",
+    "typescript-eslint": "^8.11.0",
     "bun-types": "latest"
   }
 }

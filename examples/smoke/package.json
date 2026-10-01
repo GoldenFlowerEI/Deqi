@@ -5,6 +5,9 @@
   "private": true,
   "scripts": {
     "test": "bun run test.ts",
+    "all": "node run-all.mjs",
+    "all:network": "node run-all.mjs --all",
+    "list": "node run-all.mjs --list",
     "tools-test": "bun run tools-test.ts",
     "compact-test": "bun run compact-test.ts",
     "tree-test": "bun run tree-test.ts",
@@ -31,8 +34,7 @@
     "v2.2.1-web": "node v2.2.1-web-test.ts",
     "v4.8": "node v4.8-test.ts",
     "server-smoke": "node server-smoke.ts",
-    "server-real-llm": "node server-real-llm.ts",
-    "all": "bun run test.ts ; bun run tools-test.ts ; bun run compact-test.ts ; bun run tree-test.ts ; bun run subagent-test.ts ; bun run introspection-test.ts ; bun run transcendence-test.ts ; bun run constitution-test.ts ; bun run user-model-test.ts ; bun run self-reflect-test.ts ; bun run integration-demo.ts ; bun run setup-test.ts ; bun run retry-test.ts ; bun run thinking-split-test.ts ; bun run tool-call-stream-test.ts ; node server-smoke.ts ; node v2.1-server-smoke.ts ; node v2.2-server-smoke.ts ; node server-real-llm.ts ; bun run v2.1-unit.ts ; bun run v2.2-unit.ts ; node v2.2-plugins-unit.ts ; node v2.2-component.ts ; node v2.2.1-web-test.ts ; bun run fix-bug ; bun run refactor ; bun run add-feature"
+    "server-real-llm": "node server-real-llm.ts"
   },
   "dependencies": {
     "@deqi/ai": "workspace:*",

@@ -18,12 +18,14 @@ import { join } from 'node:path';
 import {
   Agent,
   type AgentEvent,
+  type AgentTool,
+  type PermissionDecision,
 } from '@deqi/agent-core';
 import { ModelRegistry } from '@deqi/ai';
-import { BUILTIN_TOOLS, buildSystemPrompt, SessionManager, loadAgentsMd, loadConfig, ToolCache, retrieveRelevant, renderRetrievedMemory, suggestSkills, renderSkillSuggestions, reflectOnTool, findActivePlan, renderPlanProgress, retrieveCombined, bumpRetrievedUseCounts } from '@deqi/coding-agent';
+import { BUILTIN_TOOLS, buildSystemPrompt, SessionManager, loadAgentsMd, loadConfig, ToolCache, retrieveRelevant, renderRetrievedMemory, suggestSkills, renderSkillSuggestions, reflectOnTool, findActivePlan, renderPlanProgress, retrieveCombined, bumpRetrievedUseCounts, UserModel } from '@deqi/coding-agent';
 import { migrateLegacyMode, modeAllows, modeLabel, type PermissionMode } from './permission-modes.js';
 import { GrantStore, type PermissionGrant, type GrantLevel } from './permission-grants.js';
-import type { AgentTool, ToolExecutionContext, ToolExecutionResult } from '@deqi/agent-core';
+import type { ToolExecutionContext, ToolExecutionResult } from '@deqi/agent-core';
 import type { SessionEvent } from './types.js';
 
 /**
@@ -126,6 +128,22 @@ export class AgentRunner {
    */
   private turnEmitter: ((ev: AgentEvent) => void) | null = null;
   /**
+   * v0.3: the raw wire emitter for the current turn.
+   *
+   * `turnEmitter` takes agent-core events and runs them through
+   * `mapAgentEvent()`. The permission gate needs to put
+   * `permission_request` / `permission_resolved` on the wire, and
+   * those are `SessionEvent`s with no agent-core counterpart — they
+   * originate here, not in the agent loop. This field is the escape
+   * hatch for events the runner itself produces.
+   *
+   * Set by runTurn() before each turn and cleared after, so a stray
+   * request cannot outlive its turn.
+   */
+  private turnSessionEmit: ((ev: SessionEvent) => void) | null = null;
+  /** Monotonic counter for permission_request ids. */
+  private permissionSeq = 0;
+  /**
    * v4.4: per-session permission grants. The user can pre-approve
    * tools at the 'turn' / 'session' / 'forever' level. The
    * evaluatePermission() gate consults this store before falling
@@ -138,6 +156,28 @@ export class AgentRunner {
    * disabled, so the cost is one type check + one function call.
    */
   telemetry: { record(kind: string, data?: Record<string, string | number | boolean>): void } = { record() { /* default no-op */ } };
+  /**
+   * v0.3: per-runner UserModel (topic distribution + surprise EMA).
+   *
+   * The class and its `user_model` tool have existed since v0.6, but the
+   * server never constructed one, so the tool always returned
+   * "requires a UserModel to be supplied via the harness". Observations
+   * are fed in runTurn(); `show_surprise` in the config gates whether a
+   * topic-shift is surfaced as an event.
+   */
+  private readonly userModel = new UserModel();
+  /**
+   * v0.3: the harness surface handed to the Agent.
+   *
+   * Exposed (read-only) so the seam can be asserted directly. Until now
+   * the harness existed only as an inline object literal inside the Agent
+   * constructor, which made the wiring untestable: every harness test in
+   * the suite built its own stub and therefore could not detect that the
+   * real runner was missing `session` and `userModel` entirely.
+   *
+   * Null until init() runs.
+   */
+  harness: Record<string, unknown> | null = null;
 
   constructor(
     private readonly registry: ModelRegistry,
@@ -205,56 +245,79 @@ export class AgentRunner {
         }
       },
     }));
+
+    // v0.3: build the harness as a named value so it can be stored on
+    // `this.harness` and asserted in tests. Previously it was an inline
+    // literal in the Agent constructor, which made the wiring invisible.
+    const harness = {
+      subagent: {
+        registry: this.registry,
+        parentTools: BUILTIN_TOOLS,
+        defaultModelId: this.optsModelId,
+        // v3.9.1: forward sub-agent events to the parent's
+        // session stream so the UI sees them in real time.
+        // The per-turn emitter is set by runTurn() before each
+        // turn; outside a turn we drop events silently.
+        // Wrap in try/catch so a bug here can't break the run.
+        onSubagentEvent: (ev: unknown) => {
+          const emit = this.turnEmitter;
+          if (!emit) return;
+          try {
+            emit({ type: 'subagent_event', ev } as unknown as AgentEvent);
+          } catch { /* swallow */ }
+        },
+      },
+      // v3.6: real LLM-backed specialists. Same wiring as the subagent
+      // tool; the orchestrator tool reads it from ctx.harness.orchestrator.
+      orchestrator: {
+        registry: this.registry,
+        parentTools: BUILTIN_TOOLS,
+        defaultModelId: this.optsModelId,
+      },
+      // v3.6: per-session tool result cache. read/webFetch/browser.read
+      // check + populate this. 256 entries, 16MB cap; LRU eviction.
+      cache: new ToolCache(),
+      // v0.3: the session manager. `session_history` and `self_reflect`
+      // both read `ctx.harness.session`; without it they returned a hard
+      // error on every call, even though the system prompt tells the model
+      // to use them (system-prompt.ts "self_reflect after 3 failures").
+      // this.session is resolved at the top of init(), so it is safe here.
+      session: this.session,
+      // v0.3: the per-runner UserModel. `user_model` reads
+      // ctx.harness.userModel; without it the tool always errored and the
+      // 219-line model was unreachable at runtime. Observations are fed
+      // in runTurn() (see `this.userModel.observe`).
+      userModel: this.userModel,
+      // v3.7: tool reflector. agent-core's finishTool() calls this
+      // on every tool result. Pure (no side effects), returns a
+      // hint that gets prepended to the next system prompt.
+      reflector: reflectOnTool,
+      // v4.8: multi-desktop cluster client. Surfaced to the
+      // `delegate_remote` tool so it can pick a peer desktop
+      // and POST to its /v1/rpc/run-task. Falls back to a
+      // local-only stub if the runner was constructed without
+      // a cluster (e.g. CLI tests).
+      cluster: this.opts.cluster ?? {
+        list: () => [],
+        pick: () => null,
+        local: () => null,
+      },
+    };
+    this.harness = harness;
+
+    // v0.3: EVERY tool goes through the permission gate, including
+    // plugin-provided ones. Plugin tools are third-party code reached
+    // over the model's tool list; leaving them ungated would make
+    // `DEQI_ENABLE_PLUGINS` a remote-code-execution switch that
+    // bypasses every mode the user picked.
     this.agent = new Agent({
       registry: this.registry,
       modelId: this.optsModelId,
       system,
-      tools: [...BUILTIN_TOOLS, ...pluginAgentTools],
+      tools: [...BUILTIN_TOOLS, ...pluginAgentTools].map((t) => this.gateTool(t)),
       cwd: this.cwd,
       maxTurns: 50,
-      harness: {
-        subagent: {
-          registry: this.registry,
-          parentTools: BUILTIN_TOOLS,
-          defaultModelId: this.optsModelId,
-          // v3.9.1: forward sub-agent events to the parent's
-          // session stream so the UI sees them in real time.
-          // The per-turn emitter is set by runTurn() before each
-          // turn; outside a turn we drop events silently.
-          // Wrap in try/catch so a bug here can't break the run.
-          onSubagentEvent: (ev: unknown) => {
-            const emit = this.turnEmitter;
-            if (!emit) return;
-            try {
-              emit({ type: 'subagent_event', ev } as unknown as AgentEvent);
-            } catch { /* swallow */ }
-          },
-        },
-        // v3.6: real LLM-backed specialists. Same wiring as the subagent
-        // tool; the orchestrator tool reads it from ctx.harness.orchestrator.
-        orchestrator: {
-          registry: this.registry,
-          parentTools: BUILTIN_TOOLS,
-          defaultModelId: this.optsModelId,
-        },
-        // v3.6: per-session tool result cache. read/webFetch/browser.read
-        // check + populate this. 256 entries, 16MB cap; LRU eviction.
-        cache: new ToolCache(),
-        // v3.7: tool reflector. agent-core's finishTool() calls this
-        // on every tool result. Pure (no side effects), returns a
-        // hint that gets prepended to the next system prompt.
-        reflector: reflectOnTool,
-        // v4.8: multi-desktop cluster client. Surfaced to the
-        // `delegate_remote` tool so it can pick a peer desktop
-        // and POST to its /v1/rpc/run-task. Falls back to a
-        // local-only stub if the runner was constructed without
-        // a cluster (e.g. CLI tests).
-        cluster: this.opts.cluster ?? {
-          list: () => [],
-          pick: () => null,
-          local: () => null,
-        },
-      },
+      harness,
       // v3.7 → v3.12: pre-call hook. Runs once per run() on the
       // first turn. Combines (v3.12) combined semantic + Jaccard
       // retrieval + skill suggestions + (v3.9.1) active plan
@@ -323,15 +386,39 @@ export class AgentRunner {
       throw new Error('a turn is already in progress on this session');
     }
 
-    // Lazy-init the session manager if the constructor was used
-    // without awaiting `init()`.
-    if (!this.session) {
-      await this.init();
-    }
+    // v0.3: feed the UserModel. `show_surprise` gates whether a topic
+    // shift is worth interrupting the turn for; the observation itself
+    // always happens so the distribution stays warm even when the
+    // banner is off. isRecentSurprise() only fires on the transition,
+    // so a user staying on one topic never triggers it.
+    try {
+      const obs = this.userModel.observe(text);
+      if (this.opts.show_surprise && obs.surprise > 0.3) {
+        emit({ type: 'info', kind: 'info', text: `topic shift → ${obs.dominantTopic}` });
+      }
+    } catch { /* the UserModel must never break a turn */ }
 
-    // v2.2: per-turn model override. Snapshot the previous model
-    // so we can restore it after the turn so the next turn
-    // without an override reverts to the runner's default.
+    // v0.3: the turn is registered on `this.currentTurn` SYNCHRONOUSLY,
+    // before the first `await` in this method. The body of the turn
+    // used to run inline, which meant `currentTurn` was still null
+    // whenever the caller's next statement executed:
+    //
+    //     runner.runTurn(text, emit);          // no await
+    //     await runner.waitForCurrentTurn();   // returns immediately
+    //
+    // Every current call site happens to `await runner.runTurn(...)`
+    // first, so the race never fired in production — but the method is
+    // used as fire-and-forget-then-wait in the tests, and a silent
+    // no-op in a wait primitive is a trap for the next caller. The
+    // work is now wrapped in an async IIFE so the assignment happens
+    // in the same synchronous block as the guard above.
+    const turnId = randomUUID();
+    const controller = new AbortController();
+    this.currentAbort = controller;
+
+    // v2.2: per-turn model override. Defined out here rather than
+    // inside the IIFE because the .finally below needs to call it, and
+    // the finally runs outside the IIFE's scope.
     let restored = false;
     const restore = (): void => {
       if (restored) return;
@@ -342,79 +429,92 @@ export class AgentRunner {
         } catch { /* model not resolvable; leave the override in place */ }
       }
     };
-    if (modelOverride && modelOverride !== this.optsModelId) {
-      try {
-        this.agent.setModel(modelOverride);
-      } catch (err) {
-        emit({ type: 'info', kind: 'warning', text: `model override failed (${modelOverride}): ${(err as Error).message}; using default` });
+
+    const turn = (async () => {
+      // Lazy-init the session manager if the constructor was used
+      // without awaiting `init()`.
+      if (!this.session) {
+        await this.init();
       }
-    }
 
-    const turnId = randomUUID();
-    const controller = new AbortController();
-    this.currentAbort = controller;
-
-    // Persist the user message immediately so the session JSONL
-    // has the prompt even if the model call fails.
-    const userContent = [{ type: 'text' as const, text }];
-    await this.session.appendUserMessage(userContent);
-
-    // Wrap agent-core's event emitter as a session_event stream.
-    // The map translates the agent-core event types into the
-    // session_event types the WS protocol defines. Events that
-    // mapAgentEvent marks as DROP (provider-level noise like
-    // message_update: start/usage/done) are not sent over the wire.
-    const onAgentEvent = (ev: AgentEvent): void => {
-      const mapped = mapAgentEvent(ev);
-      if (isDropped(mapped)) return;
-      emit(mapped);
-      // v4.7: telemetry. We record `tool_execution_end` so the
-      // aggregate has per-tool call counts + error rates. No PII
-      // — only the tool name and isError flag, never the args or
-      // the result. The Telemetry class is a no-op when
-      // disabled so this hot-path cost is one type check.
-      if ((ev as { type: string }).type === 'tool_execution_end') {
-        const tev = ev as { toolName: string; result: { isError?: boolean } };
-        this.telemetry.record('tool_call', { tool: tev.toolName, isError: tev.result.isError ?? false });
-      }
-      // v3.9: dispatch to plugin event subscribers. The plugin
-      // receives the raw AgentEvent (not the wire form) so it can
-      // inspect `kind`, `text`, `toolUseId`, etc. Exceptions are
-      // swallowed — a buggy plugin handler must never break the
-      // agent's event stream.
-      const subscribers = this.opts.plugin_event_handlers?.get(ev.type);
-      if (subscribers && subscribers.length > 0) {
-        for (const sub of subscribers) {
-          try { sub(ev as unknown); } catch (e) {
-            console.error(`[Deqi-server] plugin event handler for ${ev.type} threw: ${(e as Error).message}`);
-          }
+      if (modelOverride && modelOverride !== this.optsModelId) {
+        try {
+          this.agent.setModel(modelOverride);
+        } catch (err) {
+          emit({ type: 'info', kind: 'warning', text: `model override failed (${modelOverride}): ${(err as Error).message}; using default` });
         }
       }
-    };
-    // v3.9.1: install the per-turn emitter so the subagent tool
-    // (running in this turn) can forward its events back to the
-    // parent stream. Cleared in the .finally below.
-    this.turnEmitter = onAgentEvent;
 
-    // Fire the actual turn. We don't await it here — the handle
-    // is returned so the caller can wire up abort(). The
-    // background turn is tracked in `currentTurn` and cleared
-    // on completion.
-    const turn = this.runWithPermissions(text, onAgentEvent, controller.signal)
-      .catch((err) => {
-        emit({ type: 'info', kind: 'error', text: String((err as Error).message ?? err) });
-      })
-      .finally(() => {
-        restore();
-        this.currentAbort = null;
-        this.currentTurn = null;
-        // v3.9.1: clear the per-turn emitter so any stray
-        // sub-agent events after the turn stops are dropped.
-        this.turnEmitter = null;
-        // v4.4: clear 'turn'-scoped grants now that this turn
-        // is done. 'session' / 'forever' grants are kept.
-        this.grantStore.clearTurnGrants();
-      });
+      // Persist the user message immediately so the session JSONL
+      // has the prompt even if the model call fails.
+      const userContent = [{ type: 'text' as const, text }];
+      await this.session.appendUserMessage(userContent);
+
+      // Wrap agent-core's event emitter as a session_event stream.
+      // The map translates the agent-core event types into the
+      // session_event types the WS protocol defines. Events that
+      // mapAgentEvent marks as DROP (provider-level noise like
+      // message_update: start/usage/done) are not sent over the wire.
+      const onAgentEvent = (ev: AgentEvent): void => {
+        const mapped = mapAgentEvent(ev);
+        if (isDropped(mapped)) return;
+        emit(mapped);
+        // v4.7: telemetry. We record `tool_execution_end` so the
+        // aggregate has per-tool call counts + error rates. No PII
+        // — only the tool name and isError flag, never the args or
+        // the result. The Telemetry class is a no-op when
+        // disabled so this hot-path cost is one type check.
+        if ((ev as { type: string }).type === 'tool_execution_end') {
+          const tev = ev as { toolName: string; result: { isError?: boolean } };
+          this.telemetry.record('tool_call', { tool: tev.toolName, isError: tev.result.isError ?? false });
+        }
+        // v3.9: dispatch to plugin event subscribers. The plugin
+        // receives the raw AgentEvent (not the wire form) so it can
+        // inspect `kind`, `text`, `toolUseId`, etc. Exceptions are
+        // swallowed — a buggy plugin handler must never break the
+        // agent's event stream.
+        const subscribers = this.opts.plugin_event_handlers?.get(ev.type);
+        if (subscribers && subscribers.length > 0) {
+          for (const sub of subscribers) {
+            try { sub(ev as unknown); } catch (e) {
+              console.error(`[Deqi-server] plugin event handler for ${ev.type} threw: ${(e as Error).message}`);
+            }
+          }
+        }
+      };
+      // v3.9.1: install the per-turn emitter so the subagent tool
+      // (running in this turn) can forward its events back to the
+      // parent stream. Cleared in the .finally below.
+      this.turnEmitter = onAgentEvent;
+      // v0.3: the raw wire emitter, for events the runner itself
+      // produces (currently just the permission round-trip).
+      this.turnSessionEmit = emit;
+
+      await this.runWithPermissions(text, onAgentEvent, controller.signal)
+        .catch((err) => {
+          emit({ type: 'info', kind: 'error', text: String((err as Error).message ?? err) });
+        });
+    })().finally(() => {
+      restore();
+      this.currentAbort = null;
+      this.currentTurn = null;
+      // v3.9.1: clear the per-turn emitter so any stray
+      // sub-agent events after the turn stops are dropped.
+      this.turnEmitter = null;
+      // v0.3: same for the wire emitter.
+      this.turnSessionEmit = null;
+      // v0.3: deny anything still parked on the permission queue.
+      // Without this, a turn aborted while a prompt was on screen
+      // leaves the awaiting checkPermissions() suspended forever and
+      // the runner never releases the caller.
+      for (const [id, req] of this.permissionQueue) {
+        this.permissionQueue.delete(id);
+        try { req.resolve('deny'); } catch { /* ignore */ }
+      }
+      // v4.4: clear 'turn'-scoped grants now that this turn
+      // is done. 'session' / 'forever' grants are kept.
+      this.grantStore.clearTurnGrants();
+    });
 
     this.currentTurn = turn;
     return {
@@ -453,12 +553,27 @@ export class AgentRunner {
     emit: (ev: AgentEvent) => void,
     signal: AbortSignal,
   ): Promise<void> {
-    // Chat-only mode: skip the agent entirely and just echo.
+    // Chat-only mode: the gate denies every tool (modeAllows returns
+    // 'deny' for chat_only), so the model still runs and produces text
+    // but any tool call comes back as "Denied" and it recovers by
+    // answering in prose. That was the intent of the original v2.0
+    // hack.
+    //
+    // The block used to sit here as an empty `if` with a comment
+    // explaining that nothing special was needed. It is kept as a
+    // guard rather than deleted so the behaviour is stated where it
+    // happens, but it is now a real assertion: if modeAllows ever
+    // stops denying in chat_only, this catches it at the boundary
+    // instead of letting tools run in a mode named "no tools".
     if (this.permissionMode === 'chat_only') {
-      // For chat-only, the model still runs but tool calls
-      // are always denied. The agent-core handles tool denial
-      // by sending the error to the model, which usually
-      // apologizes and continues. We don't need to special-case.
+      for (const name of ['bash', 'write', 'edit']) {
+        if (modeAllows('chat_only', name) !== 'deny') {
+          throw new Error(
+            `permission regression: chat_only must deny "${name}", got ` +
+            `"${modeAllows('chat_only', name)}"`,
+          );
+        }
+      }
     }
 
     const messagesBefore = this.agent.getState().messages.length;
@@ -531,6 +646,130 @@ export class AgentRunner {
       return 'allow';
     }
     return modeAllows(this.permissionMode as PermissionMode, toolName, args);
+  }
+
+  /**
+   * v0.3: the actual gate. Installed as `checkPermissions` on every tool
+   * handed to the agent-core.
+   *
+   * Until now `evaluatePermission()` had ZERO call sites: the method
+   * existed, `modeAllows()` was correct, the `permissionQueue` existed,
+   * the wire events existed — and none of it was connected to anything.
+   * All 22 tools ran with no approval in every mode, including
+   * `plan`. The desktop's permission mode dropdown was cosmetic.
+   *
+   * agent-core calls `checkPermissions` before every execution and
+   * treats `'ask'` as a hard error ("interactive approval is not
+   * available in this mode"). So the round-trip has to happen *inside*
+   * this async hook: we emit a `permission_request` and await the WS
+   * client's `permission_response`, which arrives via
+   * `resolvePermission()`.
+   */
+  private async checkToolPermission(
+    toolName: string,
+    args: unknown,
+    signal: AbortSignal,
+  ): Promise<PermissionDecision> {
+    const verdict = this.evaluatePermission(toolName, args);
+
+    if (verdict === 'allow') return { behavior: 'allow' };
+    if (verdict === 'deny') {
+      return {
+        behavior: 'deny',
+        message: `The "${toolName}" tool is not permitted in ${this.permissionModeLabel()} mode.`,
+      };
+    }
+
+    // 'ask' — block this tool call until the user decides.
+    const requestId = `perm_${Date.now().toString(36)}_${(this.permissionSeq += 1).toString(36)}`;
+    const wire = this.turnSessionEmit;
+    const decision = await new Promise<'allow' | 'allow_session' | 'deny'>((resolve) => {
+      const settle = (d: 'allow' | 'allow_session' | 'deny') => {
+        // Clean up whichever of the two terminations fires first.
+        signal.removeEventListener('abort', onAbort);
+        this.permissionQueue.delete(requestId);
+        resolve(d);
+      };
+      // If the turn is aborted while we wait, do not leave the tool
+      // call hanging forever — and do not treat the abort as consent.
+      const onAbort = () => settle('deny');
+      this.permissionQueue.set(requestId, {
+        request_id: requestId,
+        tool_name: toolName,
+        tool_input: args,
+        resolve: settle,
+      });
+      signal.addEventListener('abort', onAbort, { once: true });
+      // Tell the UI to show the prompt. If there is no live wire (a
+      // headless run, or a call that outlived its turn) we must not
+      // wait for an answer that can never arrive — deny instead.
+      if (!wire) {
+        settle('deny');
+        return;
+      }
+      try {
+        wire({
+          type: 'permission_request',
+          request_id: requestId,
+          tool_name: toolName,
+          tool_input: args,
+        });
+      } catch (e) {
+        console.error(`[Deqi-server] failed to emit permission_request:`, e);
+        settle('deny');
+      }
+    });
+
+    // Ack the decision so the UI can dismiss the prompt.
+    if (wire) {
+      try {
+        wire({ type: 'permission_resolved', request_id: requestId, decision });
+      } catch { /* ignore */ }
+    }
+
+    if (decision === 'deny') {
+      return {
+        behavior: 'deny',
+        message: `The user denied the "${toolName}" tool call.`,
+      };
+    }
+
+    // "Always allow" registers a grant so the rest of the session
+    // skips the prompt. v4.4's GrantStore already expires 'turn'
+    // grants in the .finally; we use 'session' here, which survives
+    // the turn but not the process — the conservative reading of a
+    // button labelled "always allow this session".
+    if (decision === 'allow_session') {
+      try {
+        this.grantStore.add({
+          tool: toolName,
+          pattern: 'exact',
+          level: 'session',
+          cwdScope: this.cwd,
+          note: `granted via permission prompt (${modeLabel(this.permissionMode as PermissionMode)})`,
+        });
+      } catch (e) {
+        console.error('[Deqi-server] failed to record grant:', e);
+      }
+    }
+
+    return { behavior: 'allow' };
+  }
+
+  /**
+   * v0.3: wrap a tool so the gate runs before its `execute`.
+   *
+   * `withDescription()` in the tool registry already shallow-copies
+   * each tool to override its description, so wrapping again is
+   * consistent with existing practice and does not mutate the shared
+   * BUILTIN_TOOLS entries.
+   */
+  private gateTool(tool: AgentTool): AgentTool {
+    return {
+      ...tool,
+      checkPermissions: (args: unknown) =>
+        this.checkToolPermission(tool.name, args, this.currentAbort?.signal ?? new AbortController().signal),
+    };
   }
 
   /**

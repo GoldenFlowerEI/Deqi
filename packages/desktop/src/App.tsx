@@ -44,8 +44,17 @@ interface ProjectInfo {
   pinned?: boolean;
 }
 
-const API_BASE = (import.meta.env['VITE_Deqi_API'] as string) ?? 'http://127.0.0.1:7700';
-const WS_BASE = (import.meta.env['VITE_Deqi_WS'] as string) ?? 'ws://127.0.0.1:7700/v1/chat';
+// v0.3: accept both spellings. The uppercase form is the convention
+// used by every other Deqi setting; the mixed-case one is what
+// earlier docs and .env files told people to write. Reading only the
+// mixed-case name meant a correctly-configured VITE_DEQI_API was
+// ignored and the app silently fell back to :7700.
+const API_BASE = (import.meta.env['VITE_DEQI_API'] as string)
+  ?? (import.meta.env['VITE_Deqi_API'] as string)
+  ?? 'http://127.0.0.1:7700';
+const WS_BASE = (import.meta.env['VITE_DEQI_WS'] as string)
+  ?? (import.meta.env['VITE_Deqi_WS'] as string)
+  ?? 'ws://127.0.0.1:7700/v1/chat';
 
 interface AppState {
   connection: WsState;
@@ -230,7 +239,13 @@ export function App() {
         wsRef.current?.send({ type: 'abort', session_id: snapshot.activeSessionId });
       } catch { /* ignore — the server may already have finished */ }
     }
-    const { session } = await apiRef.current.createSession();
+    // v0.3: bind the new session to the project the user is looking
+    // at, not to the server's launch directory. Falls back to the
+    // active session's cwd, and to the server default when the user
+    // has no project yet.
+    const activeCwd = snapshot.projects.find((p) => p.id === snapshot.activeProjectId)?.path
+      ?? snapshot.sessions.find((s) => s.id === snapshot.activeSessionId)?.cwd;
+    const { session } = await apiRef.current.createSession(activeCwd);
     setState((st) => ({
       ...st,
       sessions: [session as unknown as SessionSummary, ...st.sessions],

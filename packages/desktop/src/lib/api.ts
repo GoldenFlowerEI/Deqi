@@ -84,8 +84,16 @@ export class DeqiApi {
     return this.get(`/v1/sessions${q}`);
   }
 
-  createSession(): Promise<{ session: SessionDetails }> {
-    return this.post('/v1/sessions');
+  /**
+   * v0.3: `cwd` names the project the session belongs to.
+   *
+   * The server used to bind every new session to its own launch
+   * directory. The desktop knows which project the user is in, so it
+   * says so; without this, "new session" in project A opened a
+   * session rooted in whatever folder the server was started from.
+   */
+  createSession(cwd?: string): Promise<{ session: SessionDetails }> {
+    return this.post('/v1/sessions', cwd ? { cwd } : undefined);
   }
 
   getSession(id: string): Promise<{ session: SessionDetails }> {

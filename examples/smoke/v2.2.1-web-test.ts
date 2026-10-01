@@ -47,13 +47,36 @@ async function main(): Promise<void> {
   const localUrl = `http://127.0.0.1:${port}/`;
 
   try {
-    const { BUILTIN_TOOLS, webFetchTool } = await import('../../packages/coding-agent/dist/tools/index.js');
-    const { webFetchTool: direct } = await import('../../packages/coding-agent/dist/tools/web.js');
+    const { BUILTIN_TOOLS, webFetchTool } = await import('../../packages/coding-agent/dist/src/tools/index.js');
+    const { webFetchTool: direct } = await import('../../packages/coding-agent/dist/src/tools/web.js');
 
     section('BUILTIN_TOOLS registration');
     const wf = BUILTIN_TOOLS.find((t) => t.name === 'webFetch');
     ok('webFetch is in BUILTIN_TOOLS', wf !== undefined);
-    ok('webFetch === exported webFetchTool', wf === direct || wf === webFetchTool);
+    // v0.3: this used to assert `wf === direct`. It can never hold:
+    // `withDescription()` returns `{ ...tool, description }`, so the
+    // registry holds a shallow COPY whose only difference is the
+    // description. The assertion was unreachable before — the test
+    // file's import path pointed at a directory that stopped existing,
+    // and the `all` script chained with `;`, so the module-not-found
+    // error did not fail anything.
+    //
+    // The real invariant is that the registered entry is the same tool
+    // with only `description` replaced. A shallow spread preserves
+    // execute / inputSchema / isConcurrencySafe by reference, so those
+    // three must be identical; `description` must be the override.
+    const d = wf as unknown as {
+      execute: unknown; inputSchema: unknown; isConcurrencySafe: unknown; description: string;
+    };
+    const e = direct as unknown as {
+      execute: unknown; inputSchema: unknown; isConcurrencySafe: unknown; description: string;
+    };
+    ok('registered webFetch is a description-override copy, not the raw tool', wf !== direct);
+    ok('registered webFetch shares execute with the raw tool', d.execute === e.execute);
+    ok('registered webFetch shares inputSchema with the raw tool', d.inputSchema === e.inputSchema);
+    ok('registered webFetch shares isConcurrencySafe with the raw tool',
+      d.isConcurrencySafe === e.isConcurrencySafe);
+    ok('registered webFetch overrides the description', d.description !== e.description);
 
     section('input schema');
     const schema = direct.inputSchema as { required?: string[]; properties?: Record<string, unknown> };
