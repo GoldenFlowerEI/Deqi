@@ -13,7 +13,7 @@
 //   - No private/loopback hosts (SSRF protection)
 //
 // Copy to ~/.deqi/plugins/deqi-plugin-browser/ and start the
-// server with Deqi_ENABLE_PLUGINS=1 to load it.
+// server with DEQI_ENABLE_PLUGINS=1 to load it.
 
 import { spawnSync } from 'node:child_process';
 import { readFileSync, existsSync, statSync, unlinkSync, mkdirSync } from 'node:fs';

@@ -7,7 +7,7 @@
 //   - log(msg)       (proves log() is wired)
 //
 // Copy this directory to ~/.deqi/plugins/deqi-plugin-git/ and
-// start the server with Deqi_ENABLE_PLUGINS=1 to load it.
+// start the server with DEQI_ENABLE_PLUGINS=1 to load it.
 
 import { spawnSync } from 'node:child_process';
 

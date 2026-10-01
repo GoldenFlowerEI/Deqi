@@ -7,7 +7,7 @@
 // opens a socket, but only for hosts we trust).
 //
 // Copy to ~/.deqi/plugins/deqi-plugin-http-fetch/ and start the
-// server with Deqi_ENABLE_PLUGINS=1 to load it.
+// server with DEQI_ENABLE_PLUGINS=1 to load it.
 
 import { readFileSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';

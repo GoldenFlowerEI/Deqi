@@ -89,9 +89,9 @@ export function providerKey(provider: 'anthropic' | 'openai' | 'google' | 'opena
     case 'google':
       return process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || loadConfig().providers.google?.apiKey || null;
     case 'openai-compat': {
-      const envBase = process.env.Deqi_OPENAI_COMPAT_BASE_URL;
+      const envBase = process.env.DEQI_OPENAI_COMPAT_BASE_URL;
       if (envBase) {
-        return process.env.Deqi_OPENAI_COMPAT_API_KEY || 'configured';
+        return process.env.DEQI_OPENAI_COMPAT_API_KEY || 'configured';
       }
       const c = loadConfig().providers['openai-compat'];
       return c?.apiKey || null;

@@ -8,7 +8,7 @@
  *
  * This is a client (read + call). It does NOT start/stop servers.
  * For the test suite, use the in-memory transport (createInMemoryTransport)
- * by setting Deqi_MCP_INMEM=1 in the test environment.
+ * by setting DEQI_MCP_INMEM=1 in the test environment.
  */
 
 import type { AgentTool, ToolExecutionContext, ToolExecutionResult } from '@deqi/agent-core';

@@ -35,8 +35,25 @@
  *
  * The constitution is unchanged: Deqi's 10 philosophical principles
  * are our differentiator. The v5.0 additions live in the operational
- * layer BELOW the constitution. Total length ~1200 tokens (up from
- * ~700). Still ~50% of publicly-discussed industry prompt sizes.
+ * layer BELOW the constitution.
+ *
+ * v0.3 — size accounting corrected. The "under 1k" / "~1200 tokens"
+ * figures above were measured against a *broken* build: the constitution
+ * loader resolved `dist/constitution.md`, which tsc never creates, so
+ * every compiled run silently served the 10-line inline fallback instead
+ * of the real 72-line file. With that fixed, the real prompt is ~2200
+ * tokens (constitution ~700 + operational ~1470).
+ *
+ * The budget is now 2500 tokens, asserted in v5.0-test.ts. The original
+ * 2000 cap was an anti-bloat discipline, not a requirement; it was only
+ * "met" by accident. Spend on the constitution rather than on trimming —
+ * the moral-feedback layer (v0.4) is built directly on those principles,
+ * and an agent that sees principle titles without their reasoning is an
+ * agent that follows them badly.
+ *
+ * If we ever exceed 2500, the right move is a second, conditionally
+ * loaded section (a "loaded on signal" pattern) rather than trimming the
+ * constitution or the verify-before-claim rules.
  */
 
 import { loadConstitution } from './constitution.js';
@@ -71,7 +88,7 @@ export function buildSystemPrompt(opts: SystemPromptOptions): string {
 
 ---
 
-You are Deqi (Golden Flower Emergent Intelligence), a desktop AI agent built for long-running project work. You operate under the constitution above. The rest of this prompt is operating context, not philosophy.
+You are Deqi (得气), a desktop AI agent built for long-running project work. You operate under the constitution above. The rest of this prompt is operating context, not philosophy.
 
 # What you have
 - **Persistent memory** (memory tool) — facts, patterns, preferences survive across sessions.

@@ -162,7 +162,7 @@ export class DeqiServer {
   private registry: ModelRegistry;
   /**
    * v2.3: tools contributed by plugins. Loaded on `init()` when
-   * `Deqi_ENABLE_PLUGINS=1` is set. The AgentRunner passes these
+   * `DEQI_ENABLE_PLUGINS=1` is set. The AgentRunner passes these
    * to the agent as additional tools alongside BUILTIN_TOOLS.
    * Public so the /v1/plugins REST endpoint and the /v1/tools
    * endpoint can report them.
@@ -178,10 +178,10 @@ export class DeqiServer {
    *  dispatch path; exceptions are swallowed (logged). */
   private pluginEventHandlers = new Map<string, Array<(...args: unknown[]) => void>>();
   /** v4.6: file watcher for hot-reload. Null until start() runs
-   *  with Deqi_ENABLE_PLUGINS=1 AND a watch is requested. */
+   *  with DEQI_ENABLE_PLUGINS=1 AND a watch is requested. */
   private pluginWatcher: PluginWatcher | null = null;
   /** v4.7: opt-in telemetry. Disabled by default; enable via
-   *  Deqi_TELEMETRY=1 env or POST /v1/telemetry/opt-in. */
+   *  DEQI_TELEMETRY=1 env or POST /v1/telemetry/opt-in. */
   readonly telemetry: Telemetry = new Telemetry();
   /** v4.8: multi-desktop cluster registry. The local entry
    *  advertises this server to other Deqi servers sharing the
@@ -247,11 +247,11 @@ export class DeqiServer {
       console.error(`[Deqi-server] failed to install bundled skills: ${(e as Error).message}`);
     }
 
-    // v2.3: load plugins (gated by Deqi_ENABLE_PLUGINS=1). We do
+    // v2.3: load plugins (gated by DEQI_ENABLE_PLUGINS=1). We do
     // this BEFORE binding the port so a misbehaving plugin can't
     // hold the port open. Each plugin's register() is wrapped in
     // try/catch in loadPlugins(); we just collect what worked.
-    if (process.env.Deqi_ENABLE_PLUGINS === '1') {
+    if (process.env.DEQI_ENABLE_PLUGINS === '1') {
       await this.loadAndWirePlugins();
       // v4.6: start the file watcher so plugin edits don't need
       // a server restart. The watcher calls back into
@@ -269,11 +269,11 @@ export class DeqiServer {
       this.pluginWatcher.start();
       console.log(`[Deqi-server] plugin watcher started on ${pluginsDir}`);
       // v4.7: opt-in telemetry via env var
-      if (process.env.Deqi_TELEMETRY === '1') {
+      if (process.env.DEQI_TELEMETRY === '1') {
         this.telemetry.enable();
         this.telemetry.rebuildFromDisk();
         this.propagateTelemetry();
-        console.log('[Deqi-server] telemetry enabled via Deqi_TELEMETRY=1');
+        console.log('[Deqi-server] telemetry enabled via DEQI_TELEMETRY=1');
       }
     }
 
@@ -300,8 +300,8 @@ export class DeqiServer {
     // each loaded plugin id). The cluster heartbeat will refresh
     // `last_heartbeat` every 5s until stop().
     const localName =
-      process.env.Deqi_DESKTOP_NAME ?? `desktop-${getDesktopId().slice(2, 8)}`;
-    const localTags = (process.env.Deqi_DESKTOP_TAGS ?? '')
+      process.env.DEQI_DESKTOP_NAME ?? `desktop-${getDesktopId().slice(2, 8)}`;
+    const localTags = (process.env.DEQI_DESKTOP_TAGS ?? '')
       .split(',')
       .map((t) => t.trim())
       .filter((t) => t.length > 0);
@@ -480,7 +480,7 @@ export class DeqiServer {
    * to reason about.
    */
   async refreshPlugins(): Promise<void> {
-    if (process.env.Deqi_ENABLE_PLUGINS !== '1') return;
+    if (process.env.DEQI_ENABLE_PLUGINS !== '1') return;
     // Snapshot the old tool / route / event slices keyed by
     // plugin id so we know which entries belong to which plugin
     // after the reload.
@@ -913,11 +913,11 @@ export class DeqiServer {
    * ~/.deqi/plugins/* synchronously (no dynamic import) and
    * returns metadata for each. The full plugin runtime
    * (sandboxed import, tool registration) lands in v2.3
-   * behind Deqi_ENABLE_PLUGINS=1.
+   * behind DEQI_ENABLE_PLUGINS=1.
    */
   private handleListPlugins(res: ServerResponse): void {
     // v2.3: merge the on-disk discovery (always runs) with the
-    // load results (only populated when Deqi_ENABLE_PLUGINS=1
+    // load results (only populated when DEQI_ENABLE_PLUGINS=1
     // was set at startup). The UI can show "discovered but not
     // loaded" vs "loaded successfully" vs "loaded with error".
     const discovered = listPlugins();
@@ -933,7 +933,7 @@ export class DeqiServer {
         events: loaded?.events ?? [],
       };
     });
-    this.json(res, { plugins: merged, pluginsEnabled: process.env.Deqi_ENABLE_PLUGINS === '1' });
+    this.json(res, { plugins: merged, pluginsEnabled: process.env.DEQI_ENABLE_PLUGINS === '1' });
   }
 
   /**

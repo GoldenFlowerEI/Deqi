@@ -67,8 +67,11 @@ async function main(): Promise<void> {
   ok('mentions read cache for repeated reads',
     prompt.includes('cache') && prompt.includes('read'),
     'per-session cache avoids duplicate reads');
-  ok('does not exceed 2000-token cap with the new section',
-    prompt.length / 4 < 2000,
+  // Budget raised 2000 → 2500 in v0.3 — see the note in v5.0-test.ts.
+  // The old cap was only satisfiable while the constitution loader was
+  // silently serving its inline fallback instead of the real file.
+  ok('does not exceed the 2500-token budget',
+    prompt.length / 4 < 2500,
     `~${Math.ceil(prompt.length / 4)} tokens`);
 
   // ─── v5.1.a — PM skills bundled ───────────────────────────────────

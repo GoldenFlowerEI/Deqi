@@ -14,7 +14,7 @@
  *     only) — never the raw event stream.
  *
  * Off by default. The user opts in by:
- *   - `Deqi_TELEMETRY=1` env var at server start, or
+ *   - `DEQI_TELEMETRY=1` env var at server start, or
  *   - `POST /v1/telemetry/opt-in { enabled: true }`
  */
 

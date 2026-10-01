@@ -13,7 +13,7 @@
  *   2. New sections — A (persona), B (date), C (tool guidance pointer),
  *      D (anti-patterns), F (self-correction), G (verify-before-claim),
  *      I (no preamble).
- *   3. Sanity — total length is under 2000 tokens, no emoji, no
+ *   3. Sanity — total length is under the 2500-token budget, no emoji, no
  *      verbatim copy of any external system prompt.
  */
 
@@ -126,7 +126,15 @@ function main(): void {
   ok('requires "lead with the answer or the action"', prompt.includes('Lead with the answer'));
 
   section('v5.0 — Sanity');
-  ok('total prompt is under 2000 tokens', approxTokens < 2000, `~${approxTokens} tokens (${prompt.length} chars)`);
+  // Budget raised 2000 → 2500 in v0.3. The original 2000 cap was an
+  // anti-bloat discipline, not a requirement. It was only "met" because
+  // the constitution loader silently fell back to a 10-line inline stub
+  // in compiled builds (see the v0.3 fix in coding-agent/src/constitution.ts) —
+  // the agent was running on bare principle *titles* with none of the
+  // reasoning. Loading the real 72-line constitution is worth ~670 tokens
+  // and is the correct trade: the principles are the harness's whole
+  // differentiator, and the moral-feedback layer (v0.4) builds on them.
+  ok('total prompt is under the 2500-token budget', approxTokens < 2500, `~${approxTokens} tokens (${prompt.length} chars)`);
   ok('no decorative emoji in the entire prompt',
     !/[\u{1F300}-\u{1FAFF}]|[\u{2600}-\u{27BF}]/u.test(prompt));
   ok('constitution source is still reported', prompt.includes('Constitution source:'));

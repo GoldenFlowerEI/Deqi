@@ -4,7 +4,7 @@
  * What's covered (~10 asserts):
  *   - listPlugins on a missing dir returns []
  *   - listPlugins on a dir with the example plugin returns metadata
- *   - loadPlugins without Deqi_ENABLE_PLUGINS returns [] (gated)
+ *   - loadPlugins without DEQI_ENABLE_PLUGINS returns [] (gated)
  *   - loadPlugins with enabled:true actually dynamic-imports the
  *     example plugin, calls its `register(api)`, and returns
  *     the registered tools

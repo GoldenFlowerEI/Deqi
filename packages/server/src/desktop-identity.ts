@@ -28,11 +28,11 @@ let cached: string | null = null;
 export function getDesktopId(): string {
   if (cached) return cached;
   // v4.8: explicit override (testing + multi-instance on the
-  // same machine). Setting Deqi_DESKTOP_ID lets two Deqi-servers
+  // same machine). Setting DEQI_DESKTOP_ID lets two Deqi-servers
   // run side-by-side on one host without colliding in
   // cluster.json. Production deployments on distinct machines
   // never set this — each machine gets its own persisted id.
-  const override = process.env.Deqi_DESKTOP_ID ?? '';
+  const override = process.env.DEQI_DESKTOP_ID ?? '';
   if (/^d_[0-9a-f]{16}$/.test(override)) {
     cached = override;
     return cached;

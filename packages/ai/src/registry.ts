@@ -88,11 +88,11 @@ export class ModelRegistry {
         baseUrl: env.GOOGLE_BASE_URL,
       };
     }
-    if (env.Deqi_OPENAI_COMPAT_BASE_URL && env.Deqi_OPENAI_COMPAT_API_KEY) {
+    if (env.DEQI_OPENAI_COMPAT_BASE_URL && env.DEQI_OPENAI_COMPAT_API_KEY) {
       auth['openai-compat'] = {
-        apiKey: env.Deqi_OPENAI_COMPAT_API_KEY,
-        baseUrl: env.Deqi_OPENAI_COMPAT_BASE_URL,
-        path: env.Deqi_OPENAI_COMPAT_PATH,
+        apiKey: env.DEQI_OPENAI_COMPAT_API_KEY,
+        baseUrl: env.DEQI_OPENAI_COMPAT_BASE_URL,
+        path: env.DEQI_OPENAI_COMPAT_PATH,
       };
     }
     return new ModelRegistry(auth);
@@ -176,7 +176,7 @@ export class ModelRegistry {
       case 'openai-compat':
         if (!this.auth['openai-compat']) {
           throw new Error(
-            'OpenAI-compatible provider is not configured (set Deqi_OPENAI_COMPAT_BASE_URL and Deqi_OPENAI_COMPAT_API_KEY)',
+            'OpenAI-compatible provider is not configured (set DEQI_OPENAI_COMPAT_BASE_URL and DEQI_OPENAI_COMPAT_API_KEY)',
           );
         }
         return createOpenAICompatStream(this.auth['openai-compat']);

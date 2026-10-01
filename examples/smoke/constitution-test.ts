@@ -60,16 +60,16 @@ async function main(): Promise<void> {
     const dir = mkdtempSync(join(tmpdir(), 'deqi-const-'));
     const customPath = join(dir, 'my-const.md');
     writeFileSync(customPath, '# Custom\n\n1. Always be kind.\n2. Always be brief.\n', 'utf8');
-    const prev = process.env.Deqi_CONSTITUTION;
-    process.env.Deqi_CONSTITUTION = customPath;
+    const prev = process.env.DEQI_CONSTITUTION;
+    process.env.DEQI_CONSTITUTION = customPath;
     // Reset cache so the env var is picked up.
     _resetConstitutionCache();
     const c = loadConstitution();
     ok('env var override is respected', c.text.includes('Always be kind'));
     ok('source is the env-var path', c.source === customPath);
     // Restore
-    if (prev === undefined) delete process.env.Deqi_CONSTITUTION;
-    else process.env.Deqi_CONSTITUTION = prev;
+    if (prev === undefined) delete process.env.DEQI_CONSTITUTION;
+    else process.env.DEQI_CONSTITUTION = prev;
     _resetConstitutionCache();
     rmSync(dir, { recursive: true, force: true });
   }

@@ -7,7 +7,7 @@
 // safe default).
 //
 // Copy to ~/.deqi/plugins/deqi-plugin-stamp/ and start the server
-// with Deqi_ENABLE_PLUGINS=1 to load it.
+// with DEQI_ENABLE_PLUGINS=1 to load it.
 
 let lastTurnAt = 0;
 

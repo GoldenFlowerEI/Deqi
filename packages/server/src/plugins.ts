@@ -10,7 +10,7 @@
  *   - subscribe to events (api.on)
  *
  * The full loader (discovery + dynamic import + register
- * call) is gated behind `Deqi_ENABLE_PLUGINS=1` (default
+ * call) is gated behind `DEQI_ENABLE_PLUGINS=1` (default
  * off) so a bad plugin can't take down the server on startup.
  * The /v1/plugins REST endpoint always works (it just lists
  * what's on disk + whether each has a valid main).
@@ -251,13 +251,13 @@ export interface PluginLoadResult {
 /**
  * Discover + dynamic-import + register every enabled plugin.
  *
- * Gated by `Deqi_ENABLE_PLUGINS=1` so production servers can
+ * Gated by `DEQI_ENABLE_PLUGINS=1` so production servers can
  * ship with the loader off. The first iteration wraps each
  * plugin's register() call in a try/catch so a crashing plugin
  * can't take down the server. Per-plugin errors are reported
  * via the `error` field on the result, not by throwing.
  */
-export async function loadPlugins(opts: { enabled: boolean } = { enabled: process.env.Deqi_ENABLE_PLUGINS === '1' }): Promise<PluginLoadResult[]> {
+export async function loadPlugins(opts: { enabled: boolean } = { enabled: process.env.DEQI_ENABLE_PLUGINS === '1' }): Promise<PluginLoadResult[]> {
   const out: PluginLoadResult[] = [];
   if (!opts.enabled) {
     return out;
