@@ -965,6 +965,26 @@ body {
 .msg-chip-reflection[data-kind="empty"] { color: #f9e2af; border-color: rgba(249, 226, 175, 0.3); }
 .msg-chip-reflection[data-kind="large"] { color: #89b4fa; border-color: rgba(137, 180, 250, 0.3); }
 .msg-chip-compact { color: #a6e3a1; border-color: rgba(166, 227, 161, 0.3); }
+
+/* ─── Sub-agent progress (v0.3) ────────────────────────────────
+   Indented and dimmed so it reads as "the agent is working over
+   there" rather than as part of the main conversation. */
+.msg-chip-subagent {
+  margin-left: 20px;
+  color: var(--fg-dim);
+  border-color: rgba(160, 160, 180, 0.22);
+  font-size: 0.92em;
+}
+.msg-chip-subagent[data-error='true'] {
+  color: #f38ba8;
+  border-color: rgba(243, 139, 168, 0.35);
+}
+.msg-chip-subagent .subagent-model {
+  color: var(--fg-dim);
+  opacity: 0.75;
+  font-variant-numeric: tabular-nums;
+}
+
 .busy {
   align-self: flex-start;
   color: var(--fg-dim);
@@ -1066,7 +1086,7 @@ body {
   margin-top: 4px;
 }
 
-/* v5.1: feedback view �� sits in the main pane, opens via LeftRail �� Feedback */
+/* v5.1: feedback view �� sits in the main pane, opens via LeftRail �� Feedback */
 .feedback-view {
   max-width: 640px;
   margin: 0 auto;

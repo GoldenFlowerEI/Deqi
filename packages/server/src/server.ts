@@ -43,6 +43,7 @@ import { getDesktopId } from './desktop-identity.js';
 import {
   BUILTIN_TOOLS,
   loadConfig,
+  configLoadError,
   saveConfig,
   setDefaultModel,
   setBehavior,
@@ -85,7 +86,25 @@ import type {
 
 const PROTOCOL_VERSION = 1;
 const SESSION_PATH = 'C--Users-P1'; // unused; kept for compat
-const SERVER_VERSION = '0.1.0';
+const SERVER_VERSION = '0.3.0';
+
+/**
+ * v0.3: browser origins allowed to call this API.
+ *
+ * `tauri://localhost` is the Tauri shell on Windows; `http://tauri.localhost`
+ * is the macOS/Linux equivalent. The 127.0.0.1 entries are the Vite dev
+ * server the desktop proxies to during development, on both IPv4 and
+ * IPv6 — the dev server only listens on ::1 by default, so omitting
+ * the bracketed form breaks local development for no benefit.
+ */
+const DEFAULT_ALLOWED_ORIGINS = new Set([
+  'tauri://localhost',
+  'http://tauri.localhost',
+  'https://tauri.localhost',
+  'http://127.0.0.1:5173',
+  'http://localhost:5173',
+  'http://[::1]:5173',
+]);
 
 /**
  * v3.9.1: Match a plugin route pattern against a request path,
@@ -540,19 +559,55 @@ export class DeqiServer {
 
   // ─── HTTP routes ─────────────────────────────────────────────
 
+  /**
+   * v0.3: which browser origins may talk to this server.
+   *
+   * The defaults cover the two clients Deqi actually ships: the
+   * Tauri desktop shell (which serves from tauri://localhost on
+   * Windows and a custom scheme elsewhere) and a Vite dev server on
+   * :5173. Anything else must be listed in DEQI_CORS_ORIGINS.
+   *
+   * A request with no Origin header is not a browser request and is
+   * not subject to CORS at all — the local CLI tests and the desktop's
+   * own fetch rely on that, and it cannot be triggered by a page.
+   */
+  private isAllowedOrigin(origin: string): boolean {
+    if (DEFAULT_ALLOWED_ORIGINS.has(origin)) return true;
+    const extra = process.env.DEQI_CORS_ORIGINS;
+    if (!extra) return false;
+    return extra.split(',').map((s) => s.trim()).filter(Boolean).includes(origin);
+  }
+
   private async handleHttp(req: IncomingMessage, res: ServerResponse): Promise<void> {
     try {
       const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
       const path = url.pathname;
       const method = req.method ?? 'GET';
 
-      // CORS — desktop app is on a different origin (tauri://...)
-      // so we must allow cross-origin requests from the local
-      // webview. We accept * because the server only binds to
-      // 127.0.0.1, so cross-origin attacks are infeasible.
-      res.setHeader('Access-Control-Allow-Origin', '*');
+      // v0.3: CORS restricted to the origins the desktop actually
+      // uses. The old header was `*` on the reasoning that "the
+      // server only binds to 127.0.0.1, so cross-origin attacks are
+      // infeasible" — but that is precisely the case CORS exists for.
+      // Any web page the user visits can issue a request to
+      // http://127.0.0.1:7700; with a wildcard origin the browser
+      // lets it read the response. Combined with the ungated
+      // permission system that was "any website you visit can run
+      // shell commands as you and read the output".
+      //
+      // Allow-list, not a regexp: an env var that widens it must be
+      // an explicit decision. `DEQI_CORS_ORIGINS` takes a
+      // comma-separated list, which is also the escape hatch for
+      // someone running a dev frontend on another port.
+      const origin = req.headers.origin;
+      if (typeof origin === 'string' && this.isAllowedOrigin(origin)) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+        // Caches must not reuse one origin's response for another.
+        res.setHeader('Vary', 'Origin');
+        res.setHeader('Access-Control-Allow-Credentials', 'true');
+      }
       res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
       res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+      res.setHeader('Access-Control-Max-Age', '600');
       if (method === 'OPTIONS') {
         res.writeHead(204);
         res.end();
@@ -946,6 +1001,17 @@ export class DeqiServer {
       permission_mode: behavior.permissionMode,
       show_surprise: behavior.showSurprise,
       enable_reflection: behavior.enableReflection,
+      // v0.3: tell the UI when the config file could not be read.
+      // Without this the settings page just shows "no providers",
+      // which is indistinguishable from a fresh install — the user
+      // has no way to learn that their keys are sitting in a
+      // .broken-N file.
+      config_error: configLoadError()
+        ? {
+          message: configLoadError()!.message,
+          backup: configLoadError()!.backup,
+        }
+        : null,
     };
   }
 
@@ -1221,10 +1287,22 @@ export class DeqiServer {
   }
 
   /** Validate the Sec-WebSocket-Key handshake and complete it.
-   *  This is RFC 6455 §1.3 in 30 lines. */
+   *  This is RFC 6455 §1.3 in 30 lines.
+   *
+   *  v0.3: a failed handshake now writes a 400 and destroys the
+   *  socket. The callers did `if (!ok) return;` and left the
+   *  connection open — an unauthenticated client that omitted the
+   *  key held a socket open indefinitely, and Node keeps it in the
+   *  server's connection table the whole time. */
   private performWebSocketHandshake(req: IncomingMessage, socket: import('node:stream').Duplex): boolean {
     const key = req.headers['sec-websocket-key'];
-    if (!key || Array.isArray(key)) return false;
+    if (!key || Array.isArray(key)) {
+      try {
+        socket.write('HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n');
+        socket.destroy();
+      } catch { /* ignore */ }
+      return false;
+    }
     const accept = createHash('sha1')
       .update(key + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11')
       .digest('base64');
@@ -1562,9 +1640,22 @@ class WsClient {
 
   private async onData(chunk: Buffer): Promise<void> {
     this.buffer = Buffer.concat([this.buffer, chunk]);
+    // v0.3: refuse to keep concatenating once the buffer alone exceeds
+    // the frame cap. Without this, a client that streams bytes
+    // without ever completing a frame header would grow `this.buffer`
+    // until the process died — a slower, sneakier version of the same
+    // denial of service as the oversized-frame header.
+    if (this.buffer.length > MAX_WS_FRAME_BYTES) {
+      this.closeWithCode(WS_CLOSE_MESSAGE_TOO_BIG, 'frame exceeds the maximum size');
+      return;
+    }
     while (true) {
       const frame = decodeFrame(this.buffer);
       if (!frame) break;
+      if (frame.tooLarge) {
+        this.closeWithCode(WS_CLOSE_MESSAGE_TOO_BIG, 'frame exceeds the maximum size');
+        return;
+      }
       this.buffer = this.buffer.subarray(frame.totalLength);
       try {
         const msg = JSON.parse(frame.payload.toString('utf8')) as WsClientMessage;
@@ -1573,6 +1664,20 @@ class WsClient {
         this.send({ type: 'error', message: `bad frame: ${(err as Error).message}` });
       }
     }
+  }
+
+  /**
+   * v0.3: send a close frame with a real code, then tear the socket
+   * down. `socket.end()` alone leaves the peer with no reason and, for
+   * an oversized frame, leaves our own buffer half-consumed.
+   */
+  private closeWithCode(code: number, reason: string): void {
+    if (this.closed) return;
+    this.closed = true;
+    try {
+      this.socket.write(encodeCloseFrame(code, reason));
+    } catch { /* the socket may already be gone */ }
+    try { this.socket.destroy(); } catch { /* ignore */ }
   }
 
   private async handleMessage(msg: WsClientMessage): Promise<void> {
@@ -1617,6 +1722,32 @@ class WsClient {
 
 // ─── WebSocket frame codec (RFC 6455) ───────────────────────────
 
+/**
+ * v0.3: build a CLOSE frame (opcode 0x8) carrying a status code and
+ * reason. The previous `close()` called `socket.end()` with no frame
+ * at all, so a client that violated a limit learned nothing about
+ * why. Server→client frames are never masked (RFC 6455 §5.1), and the
+ * reason must not exceed 123 bytes.
+ */
+function encodeCloseFrame(code: number, reason: string): Buffer {
+  const reasonBytes = Buffer.from(reason.slice(0, 120), 'utf8');
+  const payload = Buffer.alloc(2 + reasonBytes.length);
+  payload.writeUInt16BE(code, 0);
+  reasonBytes.copy(payload, 2);
+  const len = payload.length;
+  let header: Buffer;
+  if (len < 126) {
+    header = Buffer.alloc(2);
+    header[1] = len;
+  } else {
+    header = Buffer.alloc(4);
+    header[1] = 126;
+    header.writeUInt16BE(len, 2);
+  }
+  header[0] = 0x88; // FIN + opcode 0x8 (close)
+  return Buffer.concat([header, payload]);
+}
+
 function encodeFrame(payload: string): Buffer {
   const data = Buffer.from(payload, 'utf8');
   const len = data.length;
@@ -1645,7 +1776,33 @@ function encodeFrame(payload: string): Buffer {
 interface DecodedFrame {
   payload: Buffer;
   totalLength: number;
+  /**
+   * v0.3: the header declared more than MAX_WS_FRAME_BYTES. `payload`
+   * is empty and `totalLength` is 0 — the caller must close the
+   * connection rather than loop, because the bytes still buffered do
+   * not describe a frame we are willing to read.
+   */
+  tooLarge?: boolean;
 }
+
+/**
+ * v0.3: hard ceiling on a single inbound WebSocket frame.
+ *
+ * A client can declare its payload length in the frame header (16-bit
+ * or 64-bit) before sending a single byte of body. The decoder used
+ * to trust that number and hand it straight to `Buffer.alloc()`, so a
+ * 2-byte handshake could announce a 4GB frame and take the process
+ * out. The 64-bit path was worse: `readBigUInt64BE` yields up to
+ * 2^64-1, far past the point where the number stops being a sane
+ * length and becomes a crash.
+ *
+ * 8 MiB is far above any legitimate desktop frame — the biggest the
+ * app sends is a tool result — and far below anything that hurts.
+ */
+const MAX_WS_FRAME_BYTES = 8 * 1024 * 1024;
+
+/** Close codes from RFC 6455 §7.4.1. */
+const WS_CLOSE_MESSAGE_TOO_BIG = 1009;
 
 function decodeFrame(buf: Buffer): DecodedFrame | null {
   if (buf.length < 2) return null;
@@ -1659,8 +1816,20 @@ function decodeFrame(buf: Buffer): DecodedFrame | null {
     offset += 2;
   } else if (payloadLen === 127) {
     if (buf.length < offset + 8) return null;
-    payloadLen = Number(buf.readBigUInt64BE(offset));
+    // Read as BigInt and compare BEFORE converting: 2^64-1 does not
+    // survive a trip through Number() with any fidelity, and
+    // comparing post-conversion would let a rounded-down value slip
+    // under the cap.
+    const declared = buf.readBigUInt64BE(offset);
+    if (declared > BigInt(MAX_WS_FRAME_BYTES)) {
+      return { payload: Buffer.alloc(0), totalLength: 0, tooLarge: true };
+    }
+    payloadLen = Number(declared);
     offset += 8;
+  }
+  // Applies to both the 16-bit and 64-bit paths.
+  if (payloadLen > MAX_WS_FRAME_BYTES) {
+    return { payload: Buffer.alloc(0), totalLength: 0, tooLarge: true };
   }
   if (masked) {
     if (buf.length < offset + 4) return null;

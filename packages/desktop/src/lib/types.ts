@@ -66,6 +66,29 @@ export type SessionEvent =
       toolName: string;
       hint: string;
       kind: 'error' | 'empty' | 'large';
+    }
+  // v0.3: sub-agent progress.
+  //
+  // The server has emitted this since v3.9.1 and this union did not
+  // contain it, so every sub-agent event was delivered and then
+  // dropped: the desktop showed a `tool_start` for the `subagent`
+  // tool, then nothing until the sub-agent's final text arrived all
+  // at once. A long sub-agent run looked like a hang.
+  //
+  // `ev` is the sub-agent's own AgentEvent passed through verbatim,
+  // so the type is intentionally open — the UI reads only the few
+  // fields below.
+  | {
+      type: 'subagent_event';
+      subagent: { model: string; cwd: string };
+      ev: {
+        type: string;
+        toolName?: string;
+        toolUseId?: string;
+        input?: unknown;
+        event?: { type: string; delta?: string };
+        [k: string]: unknown;
+      };
     };
 
 export type WsServerMessage =

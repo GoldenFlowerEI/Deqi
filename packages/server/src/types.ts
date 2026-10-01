@@ -111,7 +111,30 @@ export type SessionEvent =
   /** v3.9.1: event forwarded from a sub-agent run (sub-agent
    *  tool or orchestrator specialist). Tagged so the UI can
    *  indent or badge these distinctly. */
-  | { type: 'subagent_event'; ev: unknown }
+  // v0.3: typed. This was `{ ev: unknown }`, which the desktop's
+  // SessionEvent union did not contain at all — so the event was
+  // emitted, delivered, and then dropped by the UI's reducer. The
+  // desktop's version of this file is a hand-maintained copy of
+  // server/src/types.ts and had drifted; the shape below is what the
+  // sub-agent tool actually emits.
+  | {
+    type: 'subagent_event';
+    /** Which agent produced it. */
+    subagent: { model: string; cwd: string };
+    /** The sub-agent's own AgentEvent, passed through verbatim. */
+    ev: {
+      type: string;
+      toolName?: string;
+      toolUseId?: string;
+      input?: unknown;
+      result?: { content: Array<{ type: string; text?: string }>; isError?: boolean };
+      event?: { type: string; delta?: string };
+      model?: { id: string };
+      turn?: number;
+      [k: string]: unknown;
+    };
+  }
+
   | {
       type: 'tool_start';
       tool_use_id: string;
@@ -224,4 +247,16 @@ export interface ServerConfig {
   show_surprise: boolean;
   /** Reflection-in-action: derive a per-turn reflection entry. */
   enable_reflection: boolean;
+  /**
+   * v0.3: set when ~/.deqi/config.json could not be read.
+   *
+   * The settings page used to show an empty provider list for a
+   * corrupt file and for a fresh install alike, so a user whose keys
+   * were preserved in a `config.json.broken-N` file had no way to find
+   * out. `backup` is the preserved copy, when one was made.
+   */
+  config_error?: {
+    message: string;
+    backup: string | null;
+  } | null;
 }

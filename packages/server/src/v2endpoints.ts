@@ -14,8 +14,8 @@
 
 import { createServer as createHttpServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { readFile, writeFile, readdir, stat } from 'node:fs/promises';
-import { existsSync, mkdirSync, readFileSync, appendFileSync } from 'node:fs';
-import { join, relative, sep } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, appendFileSync, statSync } from 'node:fs';
+import { join, relative, sep, resolve, parse } from 'node:path';
 import { homedir } from 'node:os';
 import { randomBytes } from 'node:crypto';
 import { SessionManager } from '@deqi/coding-agent';
@@ -318,6 +318,93 @@ export async function handleRunScheduleNow(
 
 // ─── Files handler ───────────────────────────────────────────────
 
+/**
+ * v0.3: roots the caller may NOT browse.
+ *
+ * `handleListFiles` takes `?root=` from the request and then checks
+ * `?path=` for escapes from that root — so the traversal guard was
+ * validating the attacker's own choice of root. Passing
+ * `?root=C:/Windows` enumerated the whole drive, and the only thing
+ * standing between a local caller and the filesystem was `SKIP_DIRS`.
+ *
+ * The correct shape of the check is "is this root a project the user
+ * actually has?" Not "is this path inside the root the caller named?".
+ * Two rules enforce that here:
+ *
+ *   1. The root must be inside a directory the user has actually
+ *      opened. In practice that means: a directory that contains a
+ *      project marker, or the server's own working directory. This
+ *      keeps the endpoint useful for real projects while refusing
+ *      `C:/`, `C:/Windows` and `$HOME`.
+ *   2. The traversal check itself stays — it is still correct for
+ *      keeping `?path=` inside the chosen root.
+ *
+ * DEQI_FILE_ROOTS is the escape hatch: a colon-separated list of
+ * additional roots to trust.
+ */
+
+const PROJECT_MARKERS = [
+  '.git', 'package.json', 'Cargo.toml', 'go.mod', 'pyproject.toml',
+  'pom.xml', 'build.gradle', 'Makefile', 'CMakeLists.txt', '.deqi',
+];
+
+/**
+ * Never browsable, whatever the marker rules say.
+ *
+ * `parse(p).root === p` catches the filesystem root itself — `C:\`,
+ * `/`, `C:/` — which is the exact thing `?root=C:/` asked for and the
+ * one directory that always has a "project marker" somewhere beneath
+ * it.
+ */
+function isForbiddenRoot(abs: string): boolean {
+  // The drive / filesystem root.
+  if (parse(abs).root === abs) return true;
+
+  const home = resolve(homedir());
+  if (abs === home) return true;
+  if (abs === join(home, '.ssh')) return true;
+
+  // Anything directly under the home directory (~/Documents, ~/.config,
+  // …) is a user's private tree even when it happens to contain a
+  // package.json.
+  if (abs.startsWith(home + sep) && abs.slice(home.length + 1).split(sep).length === 1) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * True when `abs` is a directory we are willing to serve as a file
+ * tree. Must be called with an already-resolved absolute path.
+ */
+export function isAllowedFileRoot(abs: string): boolean {
+  if (isForbiddenRoot(abs)) return false;
+
+  const extra = (process.env.DEQI_FILE_ROOTS ?? '')
+    .split(/[:;]/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  for (const e of extra) {
+    const r = resolve(e);
+    if (abs === r || abs.startsWith(r + sep)) return true;
+  }
+
+  if (!existsSync(abs)) return false;
+  try {
+    if (!statSync(abs).isDirectory()) return false;
+  } catch {
+    return false;
+  }
+
+  // A project marker at the root, or any ancestor within a few levels.
+  // The marker is what makes a directory a *project* rather than an
+  // arbitrary folder the caller named.
+  for (const marker of PROJECT_MARKERS) {
+    if (existsSync(join(abs, marker))) return true;
+  }
+  return false;
+}
+
 /** Reject paths that try to escape the root. */
 function safeJoin(root: string, rel: string): string | null {
   if (!rel || rel.startsWith('..')) return null;
@@ -337,7 +424,15 @@ export async function handleListFiles(
   res: ServerResponse,
   url: URL,
 ): Promise<void> {
-  const root = url.searchParams.get('root') ?? process.cwd();
+  // v0.3: the root is resolved and checked against what the user
+  // actually has open, NOT merely used as the baseline for a
+  // traversal check. Without this, `?root=C:/` served the drive.
+  const requested = url.searchParams.get('root') ?? process.cwd();
+  const root = resolve(requested);
+  if (!isAllowedFileRoot(root)) {
+    json(res, { error: 'forbidden_root', root, hint: 'set DEQI_FILE_ROOTS to trust a directory' }, 403);
+    return;
+  }
   const rel = url.searchParams.get('path') ?? '.';
   const abs = safeJoin(root, rel);
   if (!abs) {

@@ -24,6 +24,7 @@ export {
   resolveBehavior,
   providerKey,
   configPath,
+  configLoadError,
   _resetConfigCache,
   type DeqiConfig,
   type PermissionMode,

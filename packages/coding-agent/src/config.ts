@@ -24,7 +24,10 @@
  * the standard 12-factor pattern.
  */
 
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import {
+  existsSync, readFileSync, writeFileSync, mkdirSync,
+  copyFileSync, renameSync, unlinkSync, openSync, closeSync, fsyncSync,
+} from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 
@@ -55,28 +58,130 @@ function configPath(): string {
 
 let cached: DeqiConfig | null = null;
 
+/**
+ * v0.3: why the last load failed, or null when it succeeded.
+ *
+ * The UI shows this so a user whose providers "disappeared" is told
+ * the file is broken instead of being left to wonder.
+ */
+let lastLoadError: string | null = null;
+let lastLoadBackup: string | null = null;
+
+export function configLoadError(): { message: string; backup: string | null } | null {
+  return lastLoadError ? { message: lastLoadError, backup: lastLoadBackup } : null;
+}
+
+/**
+ * v0.3: move an unparseable config aside instead of dropping it.
+ *
+ * `loadConfig()` used to `catch { cached = EMPTY }` and move on. That
+ * alone would be survivable, but any later `saveConfig()` — from the
+ * settings page, from the setup wizard, from a provider edit — wrote
+ * the EMPTY back over the original. A single stray byte (a trailing
+ * comma from a hand edit, a half-flushed write from a crash during
+ * a previous write) turned into a permanently empty config: every
+ * stored API key gone, with no error shown and no file to recover
+ * from.
+ *
+ * So the original is preserved. `config.json.broken-<n>` keeps the
+ * exact bytes; only after that copy is on disk does the caller see a
+ * fresh EMPTY.
+ */
+function quarantineUnreadableConfig(p: string, reason: string): void {
+  const dir = dirname(p);
+  for (let n = 1; n <= 50; n += 1) {
+    const dest = join(dir, `config.json.broken-${n}`);
+    if (existsSync(dest)) continue;
+    try {
+      copyFileSync(p, dest);
+      lastLoadBackup = dest;
+      console.error(
+        `[deqi] config at ${p} is unreadable (${reason}). ` +
+        `The original was preserved at ${dest}; continuing with an empty config. ` +
+        `Fix or merge that file to restore your providers.`,
+      );
+      return;
+    } catch (e) {
+      console.error(`[deqi] could not preserve the broken config: ${(e as Error).message}`);
+      return;
+    }
+  }
+  console.error(`[deqi] config at ${p} is unreadable and 50 .broken-N backups already exist.`);
+}
+
 export function loadConfig(): DeqiConfig {
   if (cached) return cached;
   const p = configPath();
   if (!existsSync(p)) {
     cached = EMPTY;
+    lastLoadError = null;
     return cached;
   }
+  let raw: string;
   try {
-    const raw = readFileSync(p, 'utf8');
-    const parsed = JSON.parse(raw) as DeqiConfig;
-    cached = parsed.version === 1 ? parsed : EMPTY;
-  } catch {
+    raw = readFileSync(p, 'utf8');
+  } catch (e) {
+    lastLoadError = `could not read ${p}: ${(e as Error).message}`;
     cached = EMPTY;
+    return cached;
   }
+  let parsed: DeqiConfig;
+  try {
+    parsed = JSON.parse(raw) as DeqiConfig;
+  } catch (e) {
+    // The file exists but is not JSON. This is the case that used to
+    // cost the user their API keys.
+    lastLoadError = `${p} is not valid JSON: ${(e as Error).message}`;
+    quarantineUnreadableConfig(p, (e as Error).message);
+    cached = EMPTY;
+    return cached;
+  }
+  if (parsed.version !== 1) {
+    // Well-formed JSON, wrong shape. Do NOT quarantine — this file
+    // may be a deliberate newer format, and rewriting it would
+    // downgrade data the user has not asked us to touch. Just say so.
+    lastLoadError = `${p} has version ${String(parsed.version)}; this build understands version 1`;
+    cached = EMPTY;
+    return cached;
+  }
+  cached = parsed;
+  lastLoadError = null;
   return cached;
 }
 
+/**
+ * v0.3: write the config atomically.
+ *
+ * The old `writeFileSync(p, ...)` truncates the destination before
+ * writing. A crash, a full disk, or a concurrent read at that instant
+ * leaves a half-written config.json — which is then quarantined as
+ * "broken" on the next start, exactly the loss this file is trying to
+ * prevent. Write to a sibling temp file, flush it, then rename: the
+ * rename is atomic on every platform we target, so config.json is
+ * either the old content or the new content, never a mixture.
+ */
 export function saveConfig(cfg: DeqiConfig): void {
   const p = configPath();
-  mkdirSync(dirname(p), { recursive: true });
-  writeFileSync(p, JSON.stringify(cfg, null, 2), 'utf8');
+  const dir = dirname(p);
+  mkdirSync(dir, { recursive: true });
+  const tmp = join(dir, `.config.json.${process.pid}.${Date.now().toString(36)}.tmp`);
+  const body = JSON.stringify(cfg, null, 2);
+  try {
+    // wx: fail rather than clobber if the temp name somehow exists.
+    writeFileSync(tmp, body, { encoding: 'utf8', flag: 'wx' });
+    // Force the bytes out before the rename makes them visible.
+    const fd = openSync(tmp, 'r+');
+    try { fsyncSync(fd); } finally { closeSync(fd); }
+    renameSync(tmp, p);
+  } catch (e) {
+    try { unlinkSync(tmp); } catch { /* nothing to clean up */ }
+    throw new Error(
+      `failed to write ${p}: ${(e as Error).message}. ` +
+      `Your previous config is unchanged.`,
+    );
+  }
   cached = cfg;
+  lastLoadError = null;
 }
 
 /** Read the active API key for a given provider, env-first. */

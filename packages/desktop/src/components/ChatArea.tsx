@@ -28,7 +28,7 @@ interface ChatAreaProps {
 
 interface Block {
   kind: 'user' | 'assistant' | 'thinking' | 'tool' | 'info'
-      | 'memory' | 'skills' | 'reflection' | 'compact';
+      | 'memory' | 'skills' | 'reflection' | 'compact' | 'subagent';
   text: string;
   // For tool blocks:
   toolName?: string;
@@ -36,6 +36,12 @@ interface Block {
   toolOutput?: string;
   toolError?: boolean;
   toolDurationMs?: number;
+  // For sub-agent blocks (v0.3). `subagentStep` is a human label for
+  // what the sub-agent is doing right now; the raw event carries far
+  // more than the UI needs to show.
+  subagentModel?: string;
+  subagentStep?: string;
+  subagentError?: boolean;
   // For ambient event blocks (v3.6/v3.7):
   memoryFacts?: number;
   memoryPatterns?: number;
@@ -173,6 +179,26 @@ function BlockView({ block }: { block: Block }) {
       </div>
     );
   }
+  if (block.kind === 'subagent') {
+    // v0.3: sub-agent progress. Indented and de-emphasised so it reads
+    // as "the agent is working over there" rather than as part of the
+    // main conversation. Without this the `subagent` tool block was
+    // the only thing on screen for the whole run.
+    return (
+      <div
+        className="msg msg-chip msg-chip-subagent"
+        data-error={block.subagentError ? 'true' : 'false'}
+        data-model={block.subagentModel}
+      >
+        <span className="chip-icon">⑂</span>
+        <span className="chip-text">
+          <span className="subagent-model">{block.subagentModel}</span>
+          {' '}
+          {block.subagentStep}
+        </span>
+      </div>
+    );
+  }
   return null;
 }
 
@@ -201,7 +227,8 @@ function useMemoBlocks(events: SessionEvent[], userPrompts: string[]): Block[] {
     | { kind: 'memory'; facts: number; patterns: number; prefs: number; query: string }
     | { kind: 'skills'; skills: Array<{ name: string; score: number }> }
     | { kind: 'reflection'; toolName: string; hint: string; reflectionKind: 'error' | 'empty' | 'large' }
-    | { kind: 'compact'; before: number; after: number };
+    | { kind: 'compact'; before: number; after: number }
+    | { kind: 'subagent'; model: string; step: string; error: boolean };
 
   interface Turn {
     textDeltas: string[];   // runs of text_delta, concatenated
@@ -291,6 +318,36 @@ function useMemoBlocks(events: SessionEvent[], userPrompts: string[]): Block[] {
       i += 1;
       continue;
     }
+    if (ev.type === 'subagent_event') {
+      // v0.3: this event was emitted by the server since v3.9.1 and
+      // had no branch here, so it fell through to the final
+      // `i += 1` and vanished. The visible effect: a `subagent` tool
+      // call showed a spinner, then nothing at all until the whole
+      // sub-agent finished and its final text appeared at once. A
+      // two-minute sub-agent looked identical to a hang.
+      const inner = ev.ev;
+      let step = '';
+      let error = false;
+      if (inner.type === 'tool_execution_start') {
+        step = `running ${inner.toolName ?? 'tool'}`;
+      } else if (inner.type === 'tool_execution_end') {
+        const failed = (inner as { result?: { isError?: boolean } }).result?.isError === true;
+        step = failed ? `${inner.toolName ?? 'tool'} failed` : `${inner.toolName ?? 'tool'} done`;
+        error = failed;
+      } else if (inner.type === 'message_update') {
+        const delta = inner.event?.type === 'text_delta' ? (inner.event.delta ?? '') : '';
+        step = delta.trim() ? delta.trim().slice(0, 80) : 'thinking';
+      } else if (inner.type === 'turn_start') {
+        step = `turn ${inner.turn ?? '?'}`;
+      } else if (inner.type === 'agent_start') {
+        step = 'starting';
+      } else {
+        step = inner.type;
+      }
+      cur.ambient.push({ kind: 'subagent', model: ev.subagent.model, step, error });
+      i += 1;
+      continue;
+    }
     // agent_start / agent_end / turn_start / turn_end / tokens /
     // permission_* / reflection — not rendered as their own block
     i += 1;
@@ -341,6 +398,13 @@ function useMemoBlocks(events: SessionEvent[], userPrompts: string[]): Block[] {
         blocks.push({
           kind: 'compact', text: '',
           compactBefore: a.before, compactAfter: a.after,
+        });
+      } else if (a.kind === 'subagent') {
+        blocks.push({
+          kind: 'subagent', text: a.step,
+          subagentModel: a.model,
+          subagentStep: a.step,
+          subagentError: a.error,
         });
       }
     }

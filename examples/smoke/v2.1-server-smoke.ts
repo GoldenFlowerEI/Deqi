@@ -144,10 +144,17 @@ async function main(): Promise<void> {
   writeFileSync(join(fakeHome, '.deqi', 'sessions', 'test', 's_beta.jsonl'),
     [JSON.stringify(sessionB), JSON.stringify(msgB1)].join('\n') + '\n', 'utf8');
 
-  // Seed a fixture directory for /v1/files
+  // Seed a fixture directory for /v1/files.
+  //
+  // v0.3: it needs a `package.json`. Since v0.3 the endpoint refuses a
+  // root that is not recognisably a project, because the old
+  // traversal check validated `?path=` against the root the CALLER
+  // named — so `?root=C:/` enumerated the whole drive. The fixture
+  // now looks like a real project instead of a bare directory.
   const fixtureDir = join(tmpDir, 'fixture');
   mkdirSync(join(fixtureDir, 'src'), { recursive: true });
   mkdirSync(join(fixtureDir, 'node_modules', 'foo'), { recursive: true });
+  writeFileSync(join(fixtureDir, 'package.json'), '{"name":"fixture","private":true}\n', 'utf8');
   writeFileSync(join(fixtureDir, 'README.md'), '# Fixture\n', 'utf8');
   writeFileSync(join(fixtureDir, 'src', 'index.ts'), 'export {};\n', 'utf8');
   writeFileSync(join(fixtureDir, 'node_modules', 'foo', 'index.js'), 'noop();\n', 'utf8');
@@ -281,13 +288,23 @@ async function main(): Promise<void> {
     // ── /v1/files ──────────────────────────────────────────────
     section('file tree (with skip rules)');
 
-    const filesRoot = await jget<{ root: string; node: any }>(
+    // v0.3: the server's launch directory (tmpDir) is NOT a project —
+    // it holds the fixture and the fake home, and has no project
+    // marker. Since v0.3 /v1/files refuses a root that is not
+    // recognisably a project, because the old traversal check
+    // validated `?path=` against the root the CALLER named, which made
+    // `?root=C:/` enumerate the drive.
+    const defaultRoot = await jget<{ root: string; node: any }>(
       port, `/v1/files?path=.`,
     );
-    // server defaults to process.cwd() of the server (which is tmpDir),
-    // so the root is the tmpDir. We can't assert exact contents
-    // (tmpDir has its own scaffolding), but we can assert structure.
-    ok('files returns node=dir', filesRoot.status === 200 && filesRoot.body.node.kind === 'dir');
+    ok('files refuses the server launch directory as a root (not a project)',
+      defaultRoot.status === 403, `status ${defaultRoot.status}`);
+
+    const filesRoot = await jget<{ root: string; node: any }>(
+      port, `/v1/files?path=.&root=${encodeURIComponent(fixtureDir)}`,
+    );
+    ok('files returns node=dir', filesRoot.status === 200 && filesRoot.body.node.kind === 'dir',
+      `status ${filesRoot.status}`);
 
     const filesFixture = await jget<{ root: string; node: any }>(
       port, `/v1/files?path=.&root=${encodeURIComponent(fixtureDir)}`,

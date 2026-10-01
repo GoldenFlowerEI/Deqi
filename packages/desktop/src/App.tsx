@@ -21,6 +21,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { DeqiApi } from './lib/api';
 import { DeqiWebSocket, type WsConnectionState as WsState } from './lib/ws';
+import { snapshotView, shouldApplyReplay, nextSessionView } from './lib/session-view';
 import type {
   ModelInfo,
   ScheduleItem,
@@ -197,6 +198,13 @@ export function App() {
     const id = state.activeSessionId;
     if (!id) return;
     let cancelled = false;
+    // v0.3: remember what the view looked like when the history
+    // request went out. The fetch is not instantaneous, and the user
+    // can type a prompt before it returns. Without this snapshot the
+    // replay silently overwrote whatever the live stream had
+    // produced in the meantime.
+    const { eventsAtStart, promptsAtStart } = snapshotView(stateRef.current);
+
     (async () => {
       try {
         const { messages } = await apiRef.current.getSessionMessages(id);
@@ -212,7 +220,14 @@ export function App() {
             events.push({ type: 'text_delta', delta: text } as SessionEvent);
           }
         }
-        setState((st) => ({ ...st, userPrompts, events }));
+        setState((st) => {
+          // Two ways the live view can have moved on while we were
+          // waiting, and the replay must lose to both. See
+          // lib/session-view.ts for the full story; the rule is that
+          // history is a backfill for a quiet view, nothing more.
+          if (!shouldApplyReplay(st, { eventsAtStart, promptsAtStart })) return st;
+          return { ...st, userPrompts, events };
+        });
       } catch { /* ignore */ }
     })();
     return () => { cancelled = true; };
@@ -266,7 +281,12 @@ export function App() {
   stateRef.current = state;
 
   const handleOpenSession = useCallback((id: string) => {
-    setState((st) => ({ ...st, activeSessionId: id, view: 'chat', events: [], userPrompts: [] }));
+    // v0.3: busy follows the session, not the app. It used to be left
+    // alone, so the spinner and the Stop button stayed on screen for
+    // an idle session — and Stop then aborted the *previous*
+    // session's turn, since that is still what the server had
+    // running. See lib/session-view.ts.
+    setState((st) => nextSessionView(st, id));
   }, []);
 
   const handleSelectProject = useCallback((id: string) => {
@@ -276,15 +296,7 @@ export function App() {
       // Filter sessions for the selected project
       const sessions = st.sessions.filter((s) => cwdToProjectId(s.cwd) === id);
       const first = sessions[0];
-      return {
-        ...st,
-        activeProjectId: id,
-        sessions,
-        activeSessionId: first?.id ?? null,
-        events: [],
-        userPrompts: [],
-        view: 'chat',
-      };
+      return { ...nextSessionView(st, first?.id ?? null), activeProjectId: id, sessions, view: 'chat' };
     });
   }, []);
 

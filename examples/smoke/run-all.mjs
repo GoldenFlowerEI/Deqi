@@ -101,6 +101,35 @@ const EXTRA_TESTS = new Set([
   'v3.7-live-run.ts',
 ]);
 
+/**
+ * Files that must run under Node rather than Bun.
+ *
+ * The old package.json encoded this distinction in the script names
+ * (`node v2.1-server-smoke.ts` vs `bun run test.ts`); the runner
+ * flattened it and lost it. It matters: Bun's `net` client and its
+ * HTTP server's `upgrade` handling both differ from Node's in ways a
+ * WebSocket test cannot ignore — a byte-identical, spec-conformant
+ * upgrade request is rejected under Bun with "Parse Error: Invalid
+ * method encountered", and a Bun `net.Socket` does not surface the
+ * server's 101 response to a `data` listener. Testing the frame codec
+ * under Bun tests the runtime, not the server.
+ *
+ * The server also only ever runs under Node in production
+ * (`npm run server` is `node packages/server/dist/index.js`).
+ */
+const NODE_RUNTIME = new Set([
+  'server-smoke.ts',
+  'server-real-llm.ts',
+  'v2.1-server-smoke.ts',
+  'v2.2-server-smoke.ts',
+  'v2.2-plugins-unit.ts',
+  'v2.2-component.ts',
+  'v2.2.1-web-test.ts',
+  'v4.8-test.ts',
+  // Raw WebSocket frame codec + handshake + CORS + /v1/files.
+  'v0.3-security-test.ts',
+]);
+
 /** Per-file timeout in seconds. Slow suites get more headroom. */
 const TIMEOUT_S = 180;
 
@@ -151,11 +180,16 @@ function parseArgs(argv) {
 function runOne(file) {
   return new Promise((resolve) => {
     const started = Date.now();
-    const child = spawn('bun', ['run', join(HERE, file)], {
+    // Node 24 strips TypeScript types natively, so the Node-runtime
+    // files run as .ts without a build step.
+    const useNode = NODE_RUNTIME.has(file);
+    const cmd = useNode ? process.execPath : 'bun';
+    const args = useNode ? [join(HERE, file)] : ['run', join(HERE, file)];
+    const child = spawn(cmd, args, {
       cwd: HERE,
       env: { ...process.env, DEQI_TEST_CHILD: '1' },
       stdio: ['ignore', 'pipe', 'pipe'],
-      shell: process.platform === 'win32',
+      shell: !useNode && process.platform === 'win32',
     });
     let out = '';
     const cap = 200_000;
