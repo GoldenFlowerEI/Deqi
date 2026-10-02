@@ -24,8 +24,6 @@ import { DeqiWebSocket, type WsConnectionState as WsState } from './lib/ws';
 import { snapshotView, shouldApplyReplay, nextSessionView } from './lib/session-view';
 import type {
   ModelInfo,
-  ScheduleItem,
-  ScheduleCadence,
   ServerConfig,
   SessionEvent,
   SessionSummary,

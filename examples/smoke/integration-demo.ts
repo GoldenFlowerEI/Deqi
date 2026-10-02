@@ -40,7 +40,6 @@ import {
   ToolMasteryTracker,
   loadConstitution,
   listPrinciples,
-  subagentTool,
 } from '@deqi/coding-agent';
 import {
   DefaultIntrospectionLayer,
@@ -103,9 +102,8 @@ NEXT:
  * Then a final turn with end_turn.
  */
 function makeMainStream(turnIndexRef: { i: number }): StreamFunction {
-  return function* (req: Parameters<StreamFunction>[0]): Generator<AssistantEvent> {
-    const userText = extractUserText(req.messages);
-    turnIndexRef.i += 1;
+  return function* (_req: Parameters<StreamFunction>[0]): Generator<AssistantEvent> {
+        turnIndexRef.i += 1;
     const turn = turnIndexRef.i;
 
     yield { type: 'start' };
@@ -155,16 +153,6 @@ function makeMainStream(turnIndexRef: { i: number }): StreamFunction {
     yield { type: 'usage', inputTokens: 10, outputTokens: 5 };
     yield { type: 'done', stopReason: 'end_turn' };
   };
-}
-
-function extractUserText(messages: ReadonlyArray<{ role: string; content: unknown }>): string {
-  const last = messages[messages.length - 1];
-  if (!last) return '';
-  if (typeof last.content === 'string') return last.content;
-  if (!Array.isArray(last.content)) return '';
-  return last.content
-    .map((b: { type: string; text?: string }) => (b.type === 'text' ? b.text ?? '' : ''))
-    .join('');
 }
 
 function setupRegistry(): ModelRegistry {

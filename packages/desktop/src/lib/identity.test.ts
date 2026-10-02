@@ -2,7 +2,7 @@
  * identity.test.ts — APP_VERSION, DESKTOP_ID, detectUpgrade.
  * v0.2: lock the version string + the per-install id scheme.
  */
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 // The DESKTOP_ID constant is captured at module load. To test
 // detectUpgrade + getDesktopId in isolation, we re-import the

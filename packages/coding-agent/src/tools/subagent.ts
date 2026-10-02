@@ -20,7 +20,6 @@
  */
 
 import type {
-  Agent,
   AgentEvent,
   AgentTool,
   ToolExecutionContext,
@@ -118,8 +117,8 @@ async function runSubagent(
   subCtx: SubagentContext,
 ): Promise<ToolExecutionResult> {
   // a is structurally checked; if a.prompt is missing, the caller already
-  // returned an error before reaching here. Re-narrow for the strict types.
-  const prompt = a.prompt;
+  // returned an error before reaching here. The prompt itself is read
+  // further down when the sub-agent's message list is built.
   const modelId = a.model ?? subCtx.defaultModelId;
   let model: Model;
   try {

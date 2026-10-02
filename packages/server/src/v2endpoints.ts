@@ -12,7 +12,7 @@
  * transport layer.
  */
 
-import { createServer as createHttpServer, type IncomingMessage, type ServerResponse } from 'node:http';
+import { type IncomingMessage, type ServerResponse } from 'node:http';
 import { readFile, writeFile, readdir, stat } from 'node:fs/promises';
 import { existsSync, mkdirSync, readFileSync, appendFileSync, statSync } from 'node:fs';
 import { join, relative, sep, resolve, parse } from 'node:path';

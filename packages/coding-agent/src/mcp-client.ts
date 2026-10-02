@@ -74,7 +74,10 @@ export function createStdioTransport(
   });
   const pending = new Map<number, { resolve: (r: Record<string, unknown>) => void; reject: (e: Error) => void }>();
   let buf = '';
+  // Tail of the MCP child's stderr, surfaced in transport errors.
+  // Bounded: a chatty server must not grow this without limit.
   let errorBuf = '';
+  const MAX_STDERR_TAIL = 8 * 1024;
   let spawnError: Error | null = null;
 
   // Capture spawn errors (e.g. ENOENT) so we can surface them on send().
@@ -105,11 +108,23 @@ export function createStdioTransport(
     }
   });
   child.stderr?.setEncoding('utf-8');
-  child.stderr?.on('data', (chunk: string) => { errorBuf += chunk; });
+  // Keep the tail of the child's stderr. It was accumulated into a
+  // string that nothing ever read, so an MCP server that failed to
+  // start reported only "spawn error" with no indication of why —
+  // and an MCP server that wrote a wall of protocol noise to stderr
+  // while running was invisible.
+  child.stderr?.on('data', (chunk: string) => {
+    errorBuf = (errorBuf + chunk).slice(-MAX_STDERR_TAIL);
+  });
 
   const transport: McpTransport = {
     async send(message) {
-      if (spawnError) throw new Error(`MCP child process error: ${spawnError.message}`);
+      if (spawnError) {
+        throw new Error(
+          `MCP child process error: ${spawnError.message}`
+          + (errorBuf.trim() ? `\n--- stderr ---\n${errorBuf.trim()}` : ''),
+        );
+      }
       const id = (message.id as number | undefined) ?? Math.floor(Math.random() * 1_000_000);
       return new Promise((resolveP, rejectP) => {
         pending.set(id, { resolve: resolveP, reject: rejectP });

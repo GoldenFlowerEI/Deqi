@@ -21,7 +21,7 @@
  * No live server needed — pure file-system and manifest parsing.
  */
 
-import { mkdtempSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
@@ -53,7 +53,7 @@ async function main(): Promise<void> {
   // then cleaning up. For unit-test isolation, the safest
   // path is to set HOME env (where listPlugins consults
   // homedir()).
-  const realHome = homedir();
+  const _realHome = homedir();
   const tmpHome = mkdtempSync(join(tmpdir(), 'deqi-plugins-test-'));
   const prevHome = process.env.HOME;
   const prevUserProfile = process.env.USERPROFILE;

@@ -20,7 +20,7 @@
  * No network, no LLM, no server spawn â€?pure file-system test.
  */
 
-import { mkdtempSync, mkdirSync, existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, existsSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 

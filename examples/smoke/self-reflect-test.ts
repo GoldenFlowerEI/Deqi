@@ -10,7 +10,7 @@
  *   6. self_reflect surfaces the tried/learned/nextHint fields.
  */
 
-import { mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {

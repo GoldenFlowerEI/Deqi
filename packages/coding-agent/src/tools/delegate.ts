@@ -23,7 +23,7 @@
  *     from `subagent.ts`.
  */
 
-import type { AgentTool, ToolExecutionContext, ToolExecutionResult } from '@deqi/agent-core';
+import type { AgentTool, ToolExecutionResult } from '@deqi/agent-core';
 import { runSpecialist, type OrchestratorContext, type SpecialistName } from '../specialists.js';
 
 export interface DelegateTask {

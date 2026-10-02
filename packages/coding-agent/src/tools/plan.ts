@@ -18,7 +18,7 @@
 
 import { randomBytes } from 'node:crypto';
 import { writeFileSync, existsSync, mkdirSync } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { join } from 'node:path';
 import type { AgentTool, ToolExecutionContext, ToolExecutionResult } from '@deqi/agent-core';
 import { projectDir } from '../state.js';
 
@@ -46,7 +46,6 @@ export interface PlanDocument {
   notes: Record<string, string>;
 }
 
-const PLAN_FILE = 'plan.json';
 
 function planPath(cwd: string, planId: string): string {
   return join(projectDir(cwd), 'plans', `${planId}.json`);

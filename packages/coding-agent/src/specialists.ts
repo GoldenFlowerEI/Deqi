@@ -25,8 +25,8 @@
  * any other code.
  */
 
-import { join, isAbsolute, resolve } from 'node:path';
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { isAbsolute, resolve } from 'node:path';
+import { existsSync, statSync } from 'node:fs';
 
 export type SpecialistName = 'code-reviewer' | 'test-runner' | 'doc-writer';
 

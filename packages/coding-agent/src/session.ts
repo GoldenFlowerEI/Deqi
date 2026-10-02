@@ -1,6 +1,6 @@
-import { readFile, writeFile, mkdir, appendFile, stat } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, appendFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import { join, dirname, basename } from 'node:path';
+import { join, basename } from 'node:path';
 import { createHash } from 'node:crypto';
 import { homedir } from 'node:os';
 
@@ -34,7 +34,6 @@ import { homedir } from 'node:os';
 function deqiHome(): string {
   return join(homedir(), '.deqi');
 }
-
 
 export interface SessionHeader {
   type: 'session';

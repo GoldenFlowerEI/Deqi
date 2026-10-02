@@ -31,8 +31,8 @@
  */
 
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
-import type { Socket } from 'node:net';
-import { randomUUID, createHash } from 'node:crypto';
+
+import { createHash } from 'node:crypto';
 import { join, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { existsSync, statSync } from 'node:fs';
@@ -44,13 +44,11 @@ import {
   BUILTIN_TOOLS,
   loadConfig,
   configLoadError,
-  saveConfig,
   setDefaultModel,
   setBehavior,
   setProvider,
   resolveBehavior,
   SessionManager,
-  getBuiltinTool,
   installBundledSkills,
   type PermissionMode,
 } from '@deqi/coding-agent';
@@ -85,7 +83,6 @@ import type {
 } from './types.js';
 
 const PROTOCOL_VERSION = 1;
-const SESSION_PATH = 'C--Users-P1'; // unused; kept for compat
 const SERVER_VERSION = '0.3.0';
 
 /**
@@ -376,7 +373,7 @@ export class DeqiServer {
    * The default cwd scope is the session's cwd. The default
    * pattern is 'exact' (matches the single tool name).
    */
-  private async handleAddGrant(req: IncomingMessage, res: ServerResponse, url: URL): Promise<void> {
+  private async handleAddGrant(req: IncomingMessage, res: ServerResponse, _url: URL): Promise<void> {
     const body = await readBody(req) as {
       session_id?: string;
       tool?: string;

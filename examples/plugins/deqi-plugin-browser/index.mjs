@@ -20,7 +20,6 @@ import { readFileSync, existsSync, statSync, unlinkSync, mkdirSync } from 'node:
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tmpdir, homedir } from 'node:os';
-import { resolve as resolvePath } from 'node:path';
 
 const EDGE_CANDIDATES = [
   'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',

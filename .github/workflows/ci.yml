@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # ---- build ----
+      # Every package compiles to dist/ before any test runs. The
+      # harness suite imports the BUILT output (packages/*/dist/*.js)
+      # rather than the TypeScript sources, so a stale or missing dist
+      # is a test failure mode of its own.
+      - name: Build all packages
+        run: bun run build
+
+      # ---- harness suite ----
+      # examples/smoke/run-all.mjs discovers the test files itself and
+      # exits non-zero on any failure. It used to be a hand-maintained
+      # chain of 28 `;`-separated commands, which discarded exit codes
+      # AND omitted 24 of the 52 test files on disk — so a green build
+      # meant nothing at all.
+      - name: Harness suite
+        run: bun run test:harness
+
+      # ---- desktop unit tests ----
+      - name: Desktop tests
+        run: bun run test:desktop
+
+      # ---- lint ----
+      - name: Lint
+        run: bun run lint
+
+      # ---- upload the test inventory ----
+      # If a new test file is added, it should appear in this list.
+      # A file that is missing from it was never run — which is how 24
+      # suites went missing before.
+      - name: Record the discovered test inventory
+        run: node examples/smoke/run-all.mjs --list | tee discovered-tests.txt
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: discovered-tests
+          path: discovered-tests.txt

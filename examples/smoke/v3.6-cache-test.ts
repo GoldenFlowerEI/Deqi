@@ -31,7 +31,7 @@
  * runSpecialist with no orchestrator ctx falls back to the stub (no LLM needed).
  */
 
-import { mkdtempSync, rmSync, writeFileSync, statSync, utimesSync, existsSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';

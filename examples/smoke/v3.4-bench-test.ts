@@ -34,8 +34,8 @@
  * No network, no LLM, no agent invocation.
  */
 
-import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { writeFileSync, readFileSync, existsSync } from 'node:fs';
+
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 const __filename = fileURLToPath(import.meta.url);
@@ -130,15 +130,14 @@ async function main(): Promise<void> {
       return { pass: true, detail: 'ok' };
     }],
   };
-  const r4 = await benchMod.runCase(c4);
+  await benchMod.runCase(c4);
   ok('setup captured a workdir', workdirForCleanup !== null && workdirForCleanup.length > 0);
   ok('workdir existed during the expect callback', workdirExistedMidRun);
   await new Promise((res) => setTimeout(res, 50));
   ok('workdir is cleaned up after runCase returns', !existsSync(workdirForCleanup!));
 
   section('runCase â€?happy expects that exercise fs');
-  let wroteDir: string | null = null;
-  const c5: benchMod.BenchCase = {
+    const c5: benchMod.BenchCase = {
     id: 't5', name: 'fs roundtrip', input: 'x',
     setup: (d: string) => { wroteDir = d; writeFileSync(join(d, 'a.txt'), 'hi'); },
     expect: [(d: string) => {

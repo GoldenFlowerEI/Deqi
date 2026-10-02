@@ -170,7 +170,6 @@ const OUTBOUND_TOOLS = new Set(
 export function modeAllows(
   mode: PermissionMode,
   toolName: string,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _args?: unknown,
 ): PermissionVerdict {
   // Legacy: chat-only never runs tools.

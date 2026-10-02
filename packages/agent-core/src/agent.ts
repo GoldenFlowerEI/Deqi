@@ -14,7 +14,6 @@ import type {
   AgentEvent,
   AgentState,
   AgentTool,
-  BehaviorSnapshot,
   IntrospectionLayer,
   ToolExecutionResult,
 } from './types.js';

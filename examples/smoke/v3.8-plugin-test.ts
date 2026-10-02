@@ -15,7 +15,7 @@
  * No LLM, no real network.
  */
 
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -90,7 +90,7 @@ throw new Error('synthetic plugin crash for testing');
     // reads process.env once at module load; we set HOME first.)
     // The PLUGINS_DIR was already resolved from process.env at
     // import time — we have to update the loaded module's value.
-    const mod = await import('../../packages/server/src/plugins.js' as string) as unknown as Record<string, unknown>;
+    await import('../../packages/server/src/plugins.js' as string) as unknown as Record<string, unknown>;
     // Reach into the module cache to patch the PLUGINS_DIR export.
     // (modules don't normally let you do this, but a Module
     // override via process._linkedBinding isn't worth it. Instead

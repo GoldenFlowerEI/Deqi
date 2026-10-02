@@ -7,7 +7,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { LeftRail, type RailView } from './LeftRail';
 
-const noop = () => {};
+
 
 function renderRail(overrides: Partial<Parameters<typeof LeftRail>[0]> = {}) {
   const props = {

@@ -63,7 +63,7 @@ async function main(): Promise<void> {
   {
     const m = new UserModel();
     const before = m.getDistribution()['auth'];
-    const obs = m.observe('please check the auth token validation');
+    m.observe('please check the auth token validation');
     const after = m.getDistribution()['auth'];
     // v1.1.7: chitchat now starts at 55% prior, so a single
     // auth observation doesn't immediately flip the dominant

@@ -15,9 +15,6 @@
  *   matches the v3.1 rewrite (not the old terse one).
  */
 
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
-
 let passCount = 0;
 let failCount = 0;
 const failures: string[] = [];

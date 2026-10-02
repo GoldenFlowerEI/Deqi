@@ -18,8 +18,6 @@
 
 import { DeqiApi } from '../../packages/desktop/src/lib/api';
 import type {
-  SearchResponse,
-  ScheduleItem,
   FileNode,
   MobilePair,
 } from '../../packages/desktop/src/lib/types';
@@ -248,12 +246,12 @@ async function main(): Promise<void> {
       id: 'pair_1', code: '29FC-1552-C6A0', deviceName: 'iPhone',
       pairedAt: '2026-09-07T00:00:00Z',
     };
-    // Track which call this is, since both GET and POST hit the
-    // same /v1/pair path and differ only in method.
-    let callCount = 0;
+    // Track which matcher the dispatcher reached. Both GET and POST
+    // hit the same /v1/pair path and differ only in method, so the
+    // matchers are ordered and the first one is consulted for both.
     const { fn, calls } = makeFetchMock([
-      { match: (u, i) => { callCount += 1; return i?.method === 'GET' || i?.method === undefined; }, status: 200, body: { items: [] } },
-      { match: (u, i) => { callCount += 1; return i?.method === 'POST'; }, status: 201, body: { item, expiresInSec: 600 } },
+      { match: (u, i) => i?.method === 'GET' || i?.method === undefined, status: 200, body: { items: [] } },
+      { match: (u, i) => i?.method === 'POST', status: 201, body: { item, expiresInSec: 600 } },
     ]);
     const api = new DeqiApi('http://127.0.0.1:7700');
     const origFetch = globalThis.fetch;
@@ -264,6 +262,15 @@ async function main(): Promise<void> {
       ok('listPairs returns items', list.items.length === 0);
       ok('createPair returns item + expiresInSec', created.item.id === 'pair_1' && created.expiresInSec === 600);
       ok('createPair body has deviceName', JSON.parse(lastCall(calls).init?.body as string).deviceName === 'iPhone');
+      // Two requests, correct order. The old `callCount` here counted
+      // matcher invocations — the dispatcher walks its list in order,
+      // so a POST consults the GET matcher first and falls through —
+      // and was incremented on every match and never read, which is
+      // why the mock's dispatch was never actually verified.
+      ok('exactly two pair requests were made', calls.length === 2, `count=${calls.length}`);
+      ok('the first was a GET and the second a POST',
+        calls[0]?.init?.method !== 'POST' && calls[1]?.init?.method === 'POST',
+        `${calls[0]?.init?.method} then ${calls[1]?.init?.method}`);
     } finally {
       globalThis.fetch = origFetch;
     }

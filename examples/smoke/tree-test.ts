@@ -11,7 +11,7 @@
  *   7. After reload, the tree and reflections are intact.
  */
 
-import { mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { SessionManager } from '@deqi/coding-agent';
@@ -32,7 +32,7 @@ async function main(): Promise<void> {
 
   // Simulate a small linear history.
   await sm.appendUserMessage('read the seed file');
-  const r1 = await sm.appendAssistantMessage([{ type: 'text', text: 'reading…' }]);
+  await sm.appendAssistantMessage([{ type: 'text', text: 'reading…' }]);
   await sm.appendReflection({
     note: 't=2; tools=1; errs=0',
     tried: 'called read',

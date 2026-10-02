@@ -23,7 +23,7 @@
  * the focus.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { APP_VERSION } from '../lib/identity';
 
 export type RailView =

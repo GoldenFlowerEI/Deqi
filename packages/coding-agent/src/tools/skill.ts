@@ -10,11 +10,11 @@
  * in the desktop (v3.3 will add the panel).
  */
 
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import type { AgentTool, ToolExecutionContext, ToolExecutionResult } from '@deqi/agent-core';
 import { spawn, spawnSync } from 'node:child_process';
-import { readSkills, readSkill, writeSkill, MEMORY_ROOT, type SkillMeta } from '../memory.js';
+import { readSkills, readSkill, writeSkill } from '../memory.js';
 
 /** Find a bash interpreter on this system. Falls back to sh on POSIX. */
 function findBash(): { cmd: string; args: string[] } {
@@ -45,7 +45,6 @@ function findBash(): { cmd: string; args: string[] } {
   return { cmd: process.env.SHELL || '/bin/sh', args: [] };
 }
 
-const SKILLS_DIR = join(MEMORY_ROOT, 'skills');
 
 export const skillTool: AgentTool = {
   name: 'skill',

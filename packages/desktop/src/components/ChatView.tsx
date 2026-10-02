@@ -168,7 +168,6 @@ export function ChatView({
 
         {isWelcome ? (
           <WelcomeState
-            api={api}
             config={config}
             activeSession={activeSession}
             onPickPrompt={(p) => setDraft(p)}
@@ -274,12 +273,10 @@ export function ChatView({
 }
 
 function WelcomeState({
-  api,
   config,
   activeSession,
   onPickPrompt,
 }: {
-  api: DeqiApi;
   config: ServerConfig | null;
   activeSession: SessionSummary | null;
   onPickPrompt: (s: string) => void;

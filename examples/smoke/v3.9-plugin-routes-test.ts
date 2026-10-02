@@ -19,8 +19,8 @@
  * and loaded via the public loadPlugins() entry point.
  */
 
-import { mkdtempSync, writeFileSync, mkdirSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { writeFileSync, mkdirSync } from 'node:fs';
+
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 

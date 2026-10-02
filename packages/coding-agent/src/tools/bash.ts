@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { existsSync } from 'node:fs';
+
 import type { AgentTool, ToolExecutionContext, ToolExecutionResult } from '@deqi/agent-core';
 
 const DEFAULT_TIMEOUT_MS = 30_000;

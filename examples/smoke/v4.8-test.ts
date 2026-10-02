@@ -49,7 +49,6 @@ async function main(): Promise<void> {
   // accepts a `registryPath` constructor option (v4.8 testability
   // hook) that overrides the default homedir-based path.
   const fakeHome = mkdtempSync(join(tmpdir(), 'deqi-cluster-'));
-  mkdirSync_placeholder: void 0;
   const regPath = join(fakeHome, 'cluster.json');
 
   section('v4.8 — ClusterRegistry: start / list / pick / stop');

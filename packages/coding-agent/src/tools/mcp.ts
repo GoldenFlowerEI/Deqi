@@ -18,7 +18,6 @@ import {
   listTools as mcpListTools,
   callTool as mcpCallTool,
   type McpServerConfig,
-  type McpTool,
 } from '../mcp-client.js';
 
 export const mcpTool: AgentTool = {
@@ -68,7 +67,7 @@ Concurrency: NOT safe (spawns child processes).`,
   },
   isConcurrencySafe: () => false,
 
-  async execute(args: unknown, ctx: ToolExecutionContext): Promise<ToolExecutionResult> {
+  async execute(args: unknown, _ctx: ToolExecutionContext): Promise<ToolExecutionResult> {
     const a = args as {
       mode?: 'list' | 'tools' | 'call';
       server?: string;

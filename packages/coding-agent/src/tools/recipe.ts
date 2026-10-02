@@ -10,7 +10,7 @@
  * report of what happened.
  */
 
-import type { AgentTool, ToolExecutionContext, ToolExecutionResult } from '@deqi/agent-core';
+import type { AgentTool, ToolExecutionResult } from '@deqi/agent-core';
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve as resolvePath } from 'node:path';
 import { parseRecipe, type RecipeStep } from '../recipe.js';

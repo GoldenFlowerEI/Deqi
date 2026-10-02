@@ -41,14 +41,12 @@
  * the network before it gets an exemption.
  */
 
-import { readdirSync, statSync } from 'node:fs';
-import { join, relative, basename } from 'node:path';
+import { readdirSync } from 'node:fs';
+import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 
 const HERE = fileURLToPath(new URL('.', import.meta.url));
-const REPO = join(HERE, '..', '..');
-
 // Node warns (DEP0190) that passing args with `shell: true` is
 // unescaped. On Windows `bun` is an npm shim (`bun.cmd`), so spawning
 // it without a shell does not work. Every argument we pass is
@@ -229,12 +227,6 @@ function extractCounts(out) {
   const bads = (plain.match(/\[\s*(FAIL|✗|not ok)\s*\]/gi) || []).length;
   if (oks || bads) return { passed: oks, failed: bads };
   return { passed: null, failed: null };
-}
-
-function pad(s, n) {
-  // ANSI-aware: pad on the visible length.
-  const visible = s.replace(/\x1b\[[0-9;]*m/g, '');
-  return s + ' '.repeat(Math.max(0, n - visible.length));
 }
 
 async function main() {

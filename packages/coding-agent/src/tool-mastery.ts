@@ -15,8 +15,6 @@
  * injected into the system prompt: wu-wei compliance.
  */
 
-import type { AgentTool } from '@deqi/agent-core';
-
 const MASTERY_WINDOW = 8; // last N calls
 const MASTERY_LOW_THRESHOLD = 0.5; // < 50% success = mastery hint
 const MASTERY_HIGH_THRESHOLD = 0.85; // >= 85% success = mastery

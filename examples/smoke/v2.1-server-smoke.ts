@@ -19,7 +19,7 @@
  */
 
 import { spawn, ChildProcess } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync, readdirSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createServer } from 'node:net';

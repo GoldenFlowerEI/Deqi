@@ -11,7 +11,7 @@
  * v4.0 prompt vs v5.0 prompt pass-rates. That's tracked in v5.1.1.
  */
 
-import { mkdtempSync, writeFileSync, existsSync, rmSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 

@@ -47,7 +47,7 @@ async function main(): Promise<void> {
   const localUrl = `http://127.0.0.1:${port}/`;
 
   try {
-    const { BUILTIN_TOOLS, webFetchTool } = await import('../../packages/coding-agent/dist/src/tools/index.js');
+    const { BUILTIN_TOOLS } = await import('../../packages/coding-agent/dist/src/tools/index.js');
     const { webFetchTool: direct } = await import('../../packages/coding-agent/dist/src/tools/web.js');
 
     section('BUILTIN_TOOLS registration');

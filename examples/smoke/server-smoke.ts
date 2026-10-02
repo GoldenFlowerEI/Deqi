@@ -190,7 +190,7 @@ class MiniWs {
       const out: any[] = [];
       const handler = (m: any) => out.push(m);
       this.handlers.push(handler);
-      const timer = setTimeout(() => {
+      void setTimeout(() => {
         this.handlers = this.handlers.filter((h) => h !== handler);
         resolve(out);
       }, timeoutMs);

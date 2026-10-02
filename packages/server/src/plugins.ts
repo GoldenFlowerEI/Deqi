@@ -340,7 +340,7 @@ export async function loadPlugins(opts: { enabled: boolean } = { enabled: proces
         events.push(event);
       },
       log(msg) {
-        // eslint-disable-next-line no-console
+         
         console.log(`[plugin:${info.id}] ${msg}`);
       },
     };

@@ -10,7 +10,7 @@
  */
 
 import { spawn, ChildProcess } from 'node:child_process';
-import { existsSync, readFileSync, mkdirSync, mkdtempSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, mkdtempSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createServer, createConnection, type Socket } from 'node:net';
@@ -306,9 +306,6 @@ async function main(): Promise<void> {
     ok('agent_end fired', sessionEvents.includes('agent_end'));
 
     // -- 4. Verify the model actually said "pong" (not just echoed).
-    const assistantText = sessionEvents
-      .filter((t) => t === 'text_delta')
-      .join(''); // would be a bug to count text_deltas as one
     // text_delta events are individual chunks, so we need to sum.
     // We can't reconstruct text here from event types alone;
     // we do it via the session JSONL after the turn completes.

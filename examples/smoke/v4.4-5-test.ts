@@ -9,9 +9,9 @@
  * covered by the manual smoke test in the v4.5 memory entry.
  */
 
-import { mkdtempSync, writeFileSync, readFileSync, rmSync, existsSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { tmpdir, homedir } from 'node:os';
+import { tmpdir } from 'node:os';
 
 let passCount = 0;
 let failCount = 0;

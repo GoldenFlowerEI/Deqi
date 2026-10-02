@@ -12,12 +12,11 @@
  *      setup works end-to-end with a fake registry).
  */
 
-import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
-import { tmpdir, homedir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { rmSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import {
   loadConfig,
-  saveConfig,
   setProviderKey,
   setDefaultModel,
   providerKey,

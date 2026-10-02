@@ -29,16 +29,17 @@ Intelligence); this is the v0.1.0 rebrand under the Deqi name.
 └──────────────────────────────────────────────────────────┘
 ```
 
-## What's in 0.1.0
+## What's in 0.3.1
 
 | Surface                | What you get                                           |
 |------------------------|--------------------------------------------------------|
 | **Desktop**            | Tauri 2 + React. Left rail: New task · Search · Schedule · Plugins · Web · Mobile · Feedback · Settings. Welcome state with 4 quick actions. |
 | **Server**             | 22 built-in tools, 5 plugin surfaces (tool/route/event/capability/log). Per-session permission grants (turn / session / forever). |
+| **Permissions**        | 4 modes — `plan`, `default`, `accept-edits`, `bypass-permissions` — plus the legacy `chat_only`. Every tool call is classified (`read` / `plan` / `mutate` / `shell` / `network` / `escalate`) and the gate **fails closed**: a tool with no classification asks. |
 | **Plugins**            | 6 official: `deqi-plugin-{browser, browser-v2, git, hello, http-fetch, stamp}`. Hot-reload, capability allowlist, optional. |
 | **Stack**              | Tauri 2 · React 18 · Vite 5 · Bun · TypeScript · WebView2 (Windows) · WebKit (macOS/Linux). |
 | **Provider support**   | Anthropic · OpenAI · Google · OpenAI-compatible (13 models registered by default; pick from the model dropdown). |
-| **Tests**              | 30+ smoke suites in `examples/smoke/`; `bun run test` runs the full suite. |
+| **Tests**              | 55 harness suites in `examples/smoke/` (~1300 assertions) + 193 desktop unit tests. `bun run test` runs both. |
 
 ## Install
 
@@ -52,6 +53,31 @@ bun run tauri:dev        # native window + server + Vite all start
 
 On first build, cargo compiles the Tauri shell (~5 min on Windows,
 then cached). On macOS / Linux, WebKit is the system's.
+
+## Testing
+
+```bash
+bun run test              # both suites
+bun run test:harness      # examples/smoke/ — 55 suites
+bun run test:desktop      # packages/desktop — vitest
+bun run lint              # eslint
+```
+
+The harness runner (`examples/smoke/run-all.mjs`) **discovers** the
+test files itself rather than listing them, and exits non-zero if any
+suite fails. To see what it will run:
+
+```bash
+node examples/smoke/run-all.mjs --list
+```
+
+A test file that is not in that list is not being run. If you add
+one, check it appears. (The runner used to be a hand-maintained
+`;`-separated command chain, which discarded exit codes *and* omitted
+half the files on disk — a green build proved nothing.)
+
+Five suites need a real provider key or a live server and are skipped
+unless you pass `--all`; the rest are hermetic.
 
 ## Config
 
@@ -74,7 +100,7 @@ Deqi reads `~/.deqi/config.json` on start (falls back to env vars).
 
 ## Architecture
 
-7 packages in `packages/`:
+6 packages in `packages/`:
 
 - `ai/` — model registry, provider abstraction (Anthropic / OpenAI / Google / openai-compat / mock)
 - `agent-core/` — agent loop, state machine, tool harness
@@ -82,10 +108,12 @@ Deqi reads `~/.deqi/config.json` on start (falls back to env vars).
 - `introspection/` — the 4 deep layers
 - `server/` — Deqi-server (HTTP + WebSocket facade, dist/ for shipping)
 - `desktop/` — Tauri 2 + React + Vite frontend
-- `_tui.disabled/` — v1 TUI, preserved on disk, gitignored
 
-Plus `examples/smoke/` (30+ smoke tests), `scripts/` (build + dev runners),
+Plus `examples/smoke/` (55 harness suites), `scripts/` (build + dev runners),
 and `docs/` (per-version design docs).
+
+`packages/coding-agent/_modes.disabled/` holds the old interactive /
+print front-ends. They are not compiled and not run.
 
 ## Philosophy
 
@@ -115,9 +143,8 @@ Deqi/
 │   ├── introspection/      — the 4 deep layers
 │   ├── server/             — Deqi-server (HTTP + WebSocket facade)
 │   ├── desktop/            — Tauri 2 + React + Vite frontend
-│   └── _tui.disabled/      — v1 TUI (preserved, gitignored)
 ├── examples/
-│   ├── smoke/              — 30+ smoke tests
+│   ├── smoke/              — 55 harness suites (run-all.mjs discovers them)
 │   ├── recipes/            — Recipe YAML examples
 │   └── plugins/            — 6 official plugin packages
 ├── scripts/

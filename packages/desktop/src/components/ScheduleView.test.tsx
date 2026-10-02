@@ -55,7 +55,7 @@ describe('ScheduleView', () => {
   });
 
   it('marks disabled rows with the .disabled class', async () => {
-    const { container } = render(<ScheduleView api={makeApi()} />);
+    render(<ScheduleView api={makeApi()} />);
     await waitFor(() => expect(screen.getByText('Daily brief')).toBeInTheDocument());
     const disabledRow = screen.getByText('Hourly check').closest('li')!;
     expect(disabledRow.className).toMatch(/disabled/);

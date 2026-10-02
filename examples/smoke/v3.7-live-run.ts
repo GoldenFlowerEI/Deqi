@@ -130,7 +130,6 @@ sock.on('error', (e) => { console.error('socket error:', e.message); process.exi
 sock.on('close', () => { console.log('\n[socket closed]'); process.exit(0); });
 
 let helloAcked = false;
-let turnDone = false;
 let msgCount = 0;
 
 function onOpen(): void {
@@ -230,16 +229,17 @@ function onFrame(raw: string): void {
   }
 
   if (msg.type === 'session_event' && evt?.type === 'turn_end') {
-    turnDone = true;
-    setTimeout(() => {
-      console.log('\n═══════════════════════════════════════════════════════════════');
-      console.log('  turn complete — closing');
-      console.log('═══════════════════════════════════════════════════════════════');
-      sock?.end();
-    }, 800);
+    setTimeout(finish, 800);
   }
 }
 
+/**
+ * Called once the turn has ended, after a short settle so trailing
+ * events still arrive. This was defined and never called, so the
+ * "done" banner never printed on a successful run — the script ended
+ * with the turn banner and then sat there until the 30s safety
+ * timeout killed it.
+ */
 function finish(): void {
   console.log('\n═══════════════════════════════════════════════════════════════');
   console.log('  done — closing');

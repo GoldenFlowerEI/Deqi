@@ -131,7 +131,7 @@ function runFd(
   });
 }
 
-import { readdir, stat } from 'node:fs/promises';
+import { readdir } from 'node:fs/promises';
 
 function globToRegex(glob: string): RegExp {
   let pattern = '';

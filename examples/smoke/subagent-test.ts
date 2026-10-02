@@ -148,7 +148,7 @@ async function main(): Promise<void> {
   // -- Test 4: unknown model id is reported cleanly.
   {
     const reg = setupRegistry();
-    (reg as unknown as { getStream: (m: Model) => StreamFunction }).getStream = (m) => makeStream('x');
+    (reg as unknown as { getStream: (m: Model) => StreamFunction }).getStream = () => makeStream('x');
     const subCtx: SubagentContext = {
       registry: reg,
       parentTools: BUILTIN_TOOLS,

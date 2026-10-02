@@ -14,7 +14,7 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { join } from 'node:path';
+
 import {
   Agent,
   type AgentEvent,
@@ -22,7 +22,7 @@ import {
   type PermissionDecision,
 } from '@deqi/agent-core';
 import { ModelRegistry } from '@deqi/ai';
-import { BUILTIN_TOOLS, buildSystemPrompt, SessionManager, loadAgentsMd, loadConfig, ToolCache, retrieveRelevant, renderRetrievedMemory, suggestSkills, renderSkillSuggestions, reflectOnTool, findActivePlan, renderPlanProgress, retrieveCombined, bumpRetrievedUseCounts, UserModel } from '@deqi/coding-agent';
+import { BUILTIN_TOOLS, buildSystemPrompt, SessionManager, loadAgentsMd, ToolCache, retrieveRelevant, renderRetrievedMemory, suggestSkills, renderSkillSuggestions, reflectOnTool, findActivePlan, renderPlanProgress, retrieveCombined, bumpRetrievedUseCounts, UserModel } from '@deqi/coding-agent';
 import { migrateLegacyMode, modeAllows, modeLabel, type PermissionMode } from './permission-modes.js';
 import { GrantStore, type PermissionGrant, type GrantLevel } from './permission-grants.js';
 import type { ToolExecutionContext, ToolExecutionResult } from '@deqi/agent-core';

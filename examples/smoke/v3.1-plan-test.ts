@@ -18,7 +18,7 @@
  * No network, no LLM. Tests the plan tool end-to-end.
  */
 
-import { mkdtempSync, rmSync, existsSync, readFileSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 

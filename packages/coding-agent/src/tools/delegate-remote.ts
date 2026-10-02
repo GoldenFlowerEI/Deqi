@@ -32,7 +32,7 @@
  * response, but the pool is "in flight" not "running").
  */
 
-import type { AgentTool, ToolExecutionContext, ToolExecutionResult } from '@deqi/agent-core';
+import type { AgentTool, ToolExecutionResult } from '@deqi/agent-core';
 
 export interface RemoteTarget {
   /** Pin to an exact desktop id. Mutually exclusive with capability/tag. */
