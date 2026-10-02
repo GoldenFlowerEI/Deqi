@@ -18,7 +18,7 @@
  */
 
 import { useEffect, useRef } from 'react';
-import type { SessionEvent } from '../lib/types';
+import type { SessionEvent, MoralFindingWire } from '../lib/types';
 
 interface ChatAreaProps {
   events: SessionEvent[];
@@ -28,7 +28,8 @@ interface ChatAreaProps {
 
 interface Block {
   kind: 'user' | 'assistant' | 'thinking' | 'tool' | 'info'
-      | 'memory' | 'skills' | 'reflection' | 'compact' | 'subagent';
+      | 'memory' | 'skills' | 'reflection' | 'compact' | 'subagent'
+      | 'moral' | 'review';
   text: string;
   // For tool blocks:
   toolName?: string;
@@ -54,6 +55,12 @@ interface Block {
   // For thinking:
   thinking?: string;
   thinkingElapsedMs?: number;
+  // v0.4: the moral layer. `text` is the chip headline; the findings
+  // carry the reasoning behind it, which the chip expands on demand.
+  moralSeverity?: 'note' | 'warn' | 'high';
+  moralFindings?: MoralFindingWire[];
+  reviewHeadline?: string | null;
+  reviewObservation?: string | null;
 }
 
 export function ChatArea({ events, userPrompts, busy }: ChatAreaProps) {
@@ -199,8 +206,95 @@ function BlockView({ block }: { block: Block }) {
       </div>
     );
   }
+  if (block.kind === 'moral') {
+    // v0.4, form A: a finding, shown as it happens.
+    //
+    // Collapsed by default so a run does not turn into a wall of
+    // chips, but every finding expands to the principle it comes from
+    // and the concrete consequence. A moral layer the user cannot read
+    // is just a vibe; a moral layer that interrupts every tool call is
+    // one they will switch off. `<details>` gives both without a line
+    // of state.
+    const findings = block.moralFindings ?? [];
+    // With a single finding the headline above already says the
+    // summary, so repeating it in the detail just makes the user read
+    // the same sentence twice. With several, the summary is what tells
+    // them apart, so it comes back.
+    const showHeads = findings.length > 1;
+    return (
+      <details className="msg msg-chip msg-chip-moral" data-severity={block.moralSeverity}>
+        <summary>
+          <span className="chip-icon">{MORAL_ICON[block.moralSeverity ?? 'note']}</span>
+          <span className="chip-text">{block.text}</span>
+        </summary>
+        <div className="moral-detail">
+          {findings.map((f, i) => (
+            <div className="moral-item" key={`${f.rule}-${i}`} data-severity={f.severity}>
+              {showHeads ? (
+                <div className="moral-item-head">
+                  <strong>{f.summary}</strong>
+                </div>
+              ) : null}
+              <p className="moral-consequence">{f.consequence}</p>
+              {/* The principle is always shown, even for a single
+                  finding: it is the handle the user needs in order to
+                  disagree with the flag, which is the one thing that
+                  has to survive the collapsed state. */}
+              <span className="moral-principle">principle {f.principle}</span>
+              {f.evidence ? <code className="moral-evidence">{f.evidence}</code> : null}
+            </div>
+          ))}
+        </div>
+      </details>
+    );
+  }
+  if (block.kind === 'review') {
+    // v0.4, form C: the retrospective. Descriptive by construction —
+    // see the module comment in coding-agent/src/moral.ts. Counts are
+    // shown only when non-zero, because "0 notes" is not information.
+    const counts: string[] = [];
+    if (block.moralFindings && block.moralFindings.length > 0) {
+      const by = (s: string) => block.moralFindings!.filter((f) => f.severity === s).length;
+      for (const s of ['high', 'warn', 'note'] as const) {
+        const n = by(s);
+        if (n > 0) counts.push(`${n} ${s}`);
+      }
+    }
+    return (
+      <details className="msg msg-chip msg-chip-review">
+        <summary>
+          <span className="chip-icon">⚖</span>
+          <span className="chip-text">
+            {block.reviewHeadline ?? block.reviewObservation ?? 'turn review'}
+            {counts.length > 0 ? <span className="review-counts"> · {counts.join(' · ')}</span> : null}
+          </span>
+        </summary>
+        <div className="moral-detail">
+          {block.reviewObservation ? <p className="moral-consequence">{block.reviewObservation}</p> : null}
+          {(block.moralFindings ?? []).map((f, i) => (
+            <div className="moral-item" key={`${f.rule}-${i}`} data-severity={f.severity}>
+              <div className="moral-item-head">
+                <strong>{f.summary}</strong>
+                <span className="moral-principle">principle {f.principle}</span>
+              </div>
+              <p className="moral-consequence">{f.consequence}</p>
+            </div>
+          ))}
+        </div>
+      </details>
+    );
+  }
   return null;
 }
+
+/** One icon per severity. Deliberately not a traffic light — a moral
+ *  judgement rendered as red/amber/green invites reading it as a
+ *  verdict, which is the thing this layer is not. */
+const MORAL_ICON: Record<'note' | 'warn' | 'high', string> = {
+  note: '◦',
+  warn: '△',
+  high: '◆',
+};
 
 // ─── events → blocks ────────────────────────────────────────────
 
@@ -228,7 +322,16 @@ function useMemoBlocks(events: SessionEvent[], userPrompts: string[]): Block[] {
     | { kind: 'skills'; skills: Array<{ name: string; score: number }> }
     | { kind: 'reflection'; toolName: string; hint: string; reflectionKind: 'error' | 'empty' | 'large' }
     | { kind: 'compact'; before: number; after: number }
-    | { kind: 'subagent'; model: string; step: string; error: boolean };
+    | { kind: 'subagent'; model: string; step: string; error: boolean }
+    // v0.4: the moral layer. `text` is the chip headline; `findings`
+    // carry the reasoning the chip expands to show.
+    | { kind: 'moral'; text: string; severity: 'note' | 'warn' | 'high'; findings: MoralFindingWire[] }
+    | {
+        kind: 'review';
+        headline: string | null;
+        observation: string | null;
+        findings: MoralFindingWire[];
+      };
 
   interface Turn {
     textDeltas: string[];   // runs of text_delta, concatenated
@@ -348,6 +451,36 @@ function useMemoBlocks(events: SessionEvent[], userPrompts: string[]): Block[] {
       i += 1;
       continue;
     }
+    if (ev.type === 'moral_audit') {
+      // v0.4, form A. The server already sorted these most-severe
+      // first, so the chip leads with the one that matters and the
+      // rest are a click away.
+      const top = ev.findings[0];
+      if (top) {
+        const text = ev.findings.length === 1
+          ? top.summary
+          : `${top.summary} (+${ev.findings.length - 1} more)`;
+        cur.ambient.push({ kind: 'moral', text, severity: top.severity, findings: ev.findings });
+      }
+      i += 1;
+      continue;
+    }
+    if (ev.type === 'turn_review') {
+      // v0.4, form C. The server only sends this when there is
+      // something to say, so there is no empty-state to filter here —
+      // but an all-null review would render an empty chip, so it is
+      // dropped here rather than trusted to the sender.
+      if (ev.headline || ev.observation) {
+        cur.ambient.push({
+          kind: 'review',
+          headline: ev.headline,
+          observation: ev.observation,
+          findings: ev.findings,
+        });
+      }
+      i += 1;
+      continue;
+    }
     // agent_start / agent_end / turn_start / turn_end / tokens /
     // permission_* / reflection — not rendered as their own block
     i += 1;
@@ -405,6 +538,19 @@ function useMemoBlocks(events: SessionEvent[], userPrompts: string[]): Block[] {
           subagentModel: a.model,
           subagentStep: a.step,
           subagentError: a.error,
+        });
+      } else if (a.kind === 'moral') {
+        blocks.push({
+          kind: 'moral', text: a.text,
+          moralSeverity: a.severity,
+          moralFindings: a.findings,
+        });
+      } else if (a.kind === 'review') {
+        blocks.push({
+          kind: 'review', text: a.headline ?? a.observation ?? '',
+          reviewHeadline: a.headline,
+          reviewObservation: a.observation,
+          moralFindings: a.findings,
         });
       }
     }

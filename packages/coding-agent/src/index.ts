@@ -12,6 +12,22 @@ export type { SubagentContext } from './tools/index.js';
 export { loadAgentsMd } from './agents-md.js';
 export { buildSystemPrompt } from './system-prompt.js';
 export { loadConstitution, listPrinciples, _resetConstitutionCache } from './constitution.js';
+
+// v0.3: the moral layer. Turns the constitution's ten principles into
+// pure predicates over tool calls, plus the per-turn review.
+export {
+  MORAL_RULES,
+  auditToolCall,
+  shouldBlock,
+  blockingFindings,
+  reviewTurn,
+  type MoralRule,
+  type MoralFinding,
+  type Principle,
+  type Severity,
+  type ToolUse,
+  type TurnReview,
+} from './moral.js';
 export { ToolMasteryTracker, type MasteryLevel, attachMasteryTracker } from './tool-mastery.js';
 export { UserModel, USER_MODEL_TOPICS, type UserModelTopic, type UserModelObservation } from './user-model.js';
 export {

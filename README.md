@@ -1,4 +1,4 @@
-# Deqi (得气) — v0.1.0
+# Deqi (得气) — v0.4.0
 
 > **得气** *(dé qì)* — the moment in Tai Chi / Qigong when the breath
 > starts flowing through the body and the practice begins to take effect.
@@ -29,17 +29,60 @@ Intelligence); this is the v0.1.0 rebrand under the Deqi name.
 └──────────────────────────────────────────────────────────┘
 ```
 
-## What's in 0.3.1
+## What's in 0.4.0
 
 | Surface                | What you get                                           |
 |------------------------|--------------------------------------------------------|
 | **Desktop**            | Tauri 2 + React. Left rail: New task · Search · Schedule · Plugins · Web · Mobile · Feedback · Settings. Welcome state with 4 quick actions. |
 | **Server**             | 22 built-in tools, 5 plugin surfaces (tool/route/event/capability/log). Per-session permission grants (turn / session / forever). |
 | **Permissions**        | 4 modes — `plan`, `default`, `accept-edits`, `bypass-permissions` — plus the legacy `chat_only`. Every tool call is classified (`read` / `plan` / `mutate` / `shell` / `network` / `escalate`) and the gate **fails closed**: a tool with no classification asks. |
+| **Moral layer**        | 13 rules anchored to the numbered constitution principles, in three forms: **A** every finding is shown as an expandable chip as it happens, **B** an irreversible action gets one extra confirmation even in a mode that would allow it, **C** each turn closes with a short factual review. It can raise a verdict but never lower one — it never denies. See below. |
 | **Plugins**            | 6 official: `deqi-plugin-{browser, browser-v2, git, hello, http-fetch, stamp}`. Hot-reload, capability allowlist, optional. |
 | **Stack**              | Tauri 2 · React 18 · Vite 5 · Bun · TypeScript · WebView2 (Windows) · WebKit (macOS/Linux). |
 | **Provider support**   | Anthropic · OpenAI · Google · OpenAI-compatible (13 models registered by default; pick from the model dropdown). |
-| **Tests**              | 55 harness suites in `examples/smoke/` (~1300 assertions) + 193 desktop unit tests. `bun run test` runs both. |
+| **Tests**              | 56 harness suites in `examples/smoke/` (~1400 assertions) + 199 desktop unit tests. `bun run test` runs both. |
+
+## The moral layer
+
+`constitution.md` is ten principles in prose, prepended to the system
+prompt. In practice it is a *request*: nothing checked whether the
+agent followed it, and nothing showed the user whether it did. The
+moral layer turns it into something checkable.
+
+Each rule is a pure predicate over `(toolName, args)`, anchored to a
+numbered principle, and carries a **concrete consequence** rather than
+an abstract rule — constitution principle 7, applied to the layer
+itself. A user who disagrees with a flag can read the reasoning and
+overrule it.
+
+It appears in three forms, and each is a separate guarantee:
+
+| Form | Where | What it does |
+|---|---|---|
+| **A · visible** | inline chip, as the call happens | Every finding is reported, including in modes where it does not gate. Collapsed by default; expands to the principle and the cost. |
+| **B · gate** | the permission prompt | A finding that is both `high` severity *and* on the six-rule blocking list turns an `allow` into an `ask`. The prompt carries the reason. |
+| **C · review** | end of turn | A one-line factual close: *"1 irreversible action · 2 tool calls"*. Emitted only when there is something to say. |
+
+Three properties make it safe to leave on:
+
+- **It never denies.** It can only raise a verdict or report. A moral
+  judgement that silently stops work is how the feature gets switched
+  off, and then it protects nothing. Deny messages still name the
+  consequence, so the model can route around it deliberately.
+- **`bypass-permissions` is exempt from form B.** That mode means
+  "stop asking me", and overriding it would make the mode a lie. The
+  findings are still audited and shown there.
+- **The rules are deliberately narrow.** Each one matches a specific
+  destructive shape, never a general category. `rm -rf` fires;
+  `rm -r` does not, because it prompts and is recoverable. Roughly
+  half of `v0.3-moral-test.ts` is commands that *look* dangerous and
+  must produce no finding, because a moral layer that cries wolf gets
+  muted.
+
+`secret-in-command` is a good example of the narrowness in practice:
+it looks for `sk-`/`ghp_`/`AKIA`/`xox*-` shapes in a command line,
+because a key pasted into a shell is a key in the transcript, the
+history, and every process's `ps` output at once.
 
 ## Install
 
@@ -58,7 +101,7 @@ then cached). On macOS / Linux, WebKit is the system's.
 
 ```bash
 bun run test              # both suites
-bun run test:harness      # examples/smoke/ — 55 suites
+bun run test:harness      # examples/smoke/ — 56 suites
 bun run test:desktop      # packages/desktop — vitest
 bun run lint              # eslint
 ```

@@ -22,7 +22,7 @@ import {
   type PermissionDecision,
 } from '@deqi/agent-core';
 import { ModelRegistry } from '@deqi/ai';
-import { BUILTIN_TOOLS, buildSystemPrompt, SessionManager, loadAgentsMd, ToolCache, retrieveRelevant, renderRetrievedMemory, suggestSkills, renderSkillSuggestions, reflectOnTool, findActivePlan, renderPlanProgress, retrieveCombined, bumpRetrievedUseCounts, UserModel } from '@deqi/coding-agent';
+import { BUILTIN_TOOLS, buildSystemPrompt, SessionManager, loadAgentsMd, ToolCache, retrieveRelevant, renderRetrievedMemory, suggestSkills, renderSkillSuggestions, reflectOnTool, findActivePlan, renderPlanProgress, retrieveCombined, bumpRetrievedUseCounts, UserModel, auditToolCall, blockingFindings, reviewTurn, type MoralFinding, type ToolUse } from '@deqi/coding-agent';
 import { migrateLegacyMode, modeAllows, modeLabel, type PermissionMode } from './permission-modes.js';
 import { GrantStore, type PermissionGrant, type GrantLevel } from './permission-grants.js';
 import type { ToolExecutionContext, ToolExecutionResult } from '@deqi/agent-core';
@@ -108,6 +108,12 @@ export type PermissionRequest = {
   request_id: string;
   tool_name: string;
   tool_input: unknown;
+  /**
+   * v0.4: the moral findings that caused this prompt, when the moral
+   * layer is the reason. Empty for an ordinary mode-based prompt —
+   * the UI must not dress a normal permission up as a moral verdict.
+   */
+  moral: MoralFinding[];
   /** Resolved by the WS client via permission_response. */
   resolve: (decision: 'allow' | 'allow_session' | 'deny') => void;
 };
@@ -143,6 +149,21 @@ export class AgentRunner {
   private turnSessionEmit: ((ev: SessionEvent) => void) | null = null;
   /** Monotonic counter for permission_request ids. */
   private permissionSeq = 0;
+  /**
+   * v0.4: the moral layer's per-turn accumulators.
+   *
+   * `turnFindings` collects every finding from every tool call this
+   * turn (form A already streamed them as `moral_audit`; this keeps
+   * the set for the retrospective). `turnUses` is the call/error
+   * ledger `reviewTurn()` needs to say anything at all — without it a
+   * turn review is a verdict with no evidence behind it.
+   *
+   * Both are per-turn state on a per-session runner, so they are reset
+   * at the top of every runTurn() rather than left to a .finally,
+   * where a late tool event could append to the next turn's ledger.
+   */
+  private turnFindings: MoralFinding[] = [];
+  private turnUses: ToolUse[] = [];
   /**
    * v4.4: per-session permission grants. The user can pre-approve
    * tools at the 'turn' / 'session' / 'forever' level. The
@@ -437,6 +458,12 @@ export class AgentRunner {
         await this.init();
       }
 
+      // v0.4: fresh moral ledgers for this turn. Reset here, at the
+      // top, rather than in the .finally — a tool event that arrives
+      // after the turn ends must not land in the next turn's review.
+      this.turnFindings = [];
+      this.turnUses = [];
+
       if (modelOverride && modelOverride !== this.optsModelId) {
         try {
           this.agent.setModel(modelOverride);
@@ -466,6 +493,11 @@ export class AgentRunner {
         // disabled so this hot-path cost is one type check.
         if ((ev as { type: string }).type === 'tool_execution_end') {
           const tev = ev as { toolName: string; result: { isError?: boolean } };
+          // v0.4: the turn review's ledger. The same event that feeds
+          // telemetry also records what the turn actually did, so the
+          // retrospective can say "3 tool calls, 1 failed" instead of
+          // opining without evidence.
+          this.turnUses.push({ tool: tev.toolName, ok: !(tev.result.isError ?? false) });
           this.telemetry.record('tool_call', { tool: tev.toolName, isError: tev.result.isError ?? false });
         }
         // v3.9: dispatch to plugin event subscribers. The plugin
@@ -494,6 +526,16 @@ export class AgentRunner {
         .catch((err) => {
           emit({ type: 'info', kind: 'error', text: String((err as Error).message ?? err) });
         });
+
+      // v0.4: form C — the retrospective.
+      //
+      // Emitted only when there is something to say. A review that
+      // fires on every turn, including the 90% of turns where nothing
+      // happened, teaches the user to ignore it, and then it says
+      // nothing on the turn that mattered. reviewTurn() already
+      // returns null/null for a clean turn; this is the second half of
+      // that contract, at the transport level.
+      this.emitTurnReview(emit);
     })().finally(() => {
       restore();
       this.currentAbort = null;
@@ -649,6 +691,95 @@ export class AgentRunner {
   }
 
   /**
+   * v0.4: run the moral layer over one tool call. Form A.
+   *
+   * Fires for EVERY call that produced a finding, so the user sees
+   * the layer working even in modes where it does not gate. Findings
+   * are also appended to the turn ledger for the retrospective.
+   *
+   * `auditToolCall` is pure and already swallows rule exceptions, but
+   * the emit is wrapped anyway: this runs inside the permission gate,
+   * and a transport that is mid-teardown must not be able to turn a
+   * moral note into a failed turn.
+   */
+  private auditMoral(toolName: string, args: unknown): MoralFinding[] {
+    let findings: MoralFinding[];
+    try {
+      findings = auditToolCall(toolName, args);
+    } catch (err) {
+      console.error(`[Deqi-server] moral audit threw for ${toolName}:`, err);
+      return [];
+    }
+    if (findings.length === 0) return [];
+
+    this.turnFindings.push(...findings);
+    const wire = this.turnSessionEmit;
+    if (wire) {
+      try {
+        wire({ type: 'moral_audit', tool: toolName, findings });
+      } catch (e) {
+        console.error('[Deqi-server] failed to emit moral_audit:', e);
+      }
+    }
+    return findings;
+  }
+
+  /**
+   * v0.4: whether these findings should turn an `allow` into an `ask`.
+   * Form B.
+   *
+   * Two deliberate limits, both of which exist so this stays a moral
+   * layer rather than a second permission system:
+   *
+   *   - It can only ever *raise* the verdict. It never turns an
+   *     `allow` into a `deny`. A judgement that silently stops work is
+   *     how the user ends up switching the feature off, and then it
+   *     protects nothing.
+   *   - `bypass-permissions` is exempt. That mode exists to mean
+   *     "stop asking me", and overriding it would make the mode a lie.
+   *     The findings are still audited and shown there — the user sees
+   *     them, nothing stops.
+   */
+  private moralGates(findings: MoralFinding[]): boolean {
+    if (findings.length === 0) return false;
+    if (this.permissionMode === 'bypass-permissions') return false;
+    return blockingFindings(findings).length > 0;
+  }
+
+  /**
+   * v0.4: form C — the per-turn retrospective.
+   *
+   * Built from the turn's findings and its call ledger, and sent only
+   * when it has something to say. Everything here is descriptive:
+   * "2 irreversible actions · 5 tool calls" is a fact the user can act
+   * on. A verdict about the agent's character would need them to run
+   * their own evaluation, and they have better things to do.
+   */
+  private emitTurnReview(emit: (ev: SessionEvent) => void): void {
+    let review: ReturnType<typeof reviewTurn>;
+    try {
+      review = reviewTurn(this.turnUses, this.turnFindings);
+    } catch (err) {
+      console.error('[Deqi-server] turn review threw:', err);
+      return;
+    }
+    if (!review.headline && !review.observation) return;
+    try {
+      emit({
+        type: 'turn_review',
+        headline: review.headline,
+        observation: review.observation,
+        high: review.high,
+        warn: review.warn,
+        note: review.note,
+        findings: review.findings,
+      });
+    } catch (e) {
+      console.error('[Deqi-server] failed to emit turn_review:', e);
+    }
+  }
+
+  /**
    * v0.3: the actual gate. Installed as `checkPermissions` on every tool
    * handed to the agent-core.
    *
@@ -670,9 +801,14 @@ export class AgentRunner {
     args: unknown,
     signal: AbortSignal,
   ): Promise<PermissionDecision> {
+    // v0.4: audit first, so the signal is emitted even when the mode
+    // already allows the call outright.
+    const moral = this.auditMoral(toolName, args);
+    const gated = this.moralGates(moral);
+
     const verdict = this.evaluatePermission(toolName, args);
 
-    if (verdict === 'allow') return { behavior: 'allow' };
+    if (verdict === 'allow' && !gated) return { behavior: 'allow' };
     if (verdict === 'deny') {
       return {
         behavior: 'deny',
@@ -697,6 +833,7 @@ export class AgentRunner {
         request_id: requestId,
         tool_name: toolName,
         tool_input: args,
+        moral,
         resolve: settle,
       });
       signal.addEventListener('abort', onAbort, { once: true });
@@ -713,6 +850,10 @@ export class AgentRunner {
           request_id: requestId,
           tool_name: toolName,
           tool_input: args,
+          // Only attach the moral reason when the moral layer is what
+          // caused the prompt. An empty array would make the UI treat
+          // every ordinary permission as a moral judgement.
+          ...(gated && moral.length > 0 ? { moral } : {}),
         });
       } catch (e) {
         console.error(`[Deqi-server] failed to emit permission_request:`, e);
@@ -728,9 +869,16 @@ export class AgentRunner {
     }
 
     if (decision === 'deny') {
+      // v0.4: when the moral layer is the reason, the model gets the
+      // consequence as well as the verdict. "Denied" alone makes the
+      // agent retry a variant; naming the cost gives it something to
+      // work around on purpose.
+      const why = gated && moral.length > 0
+        ? ` Reason: ${moral[0]!.consequence}`
+        : '';
       return {
         behavior: 'deny',
-        message: `The user denied the "${toolName}" tool call.`,
+        message: `The user denied the "${toolName}" tool call.${why}`,
       };
     }
 

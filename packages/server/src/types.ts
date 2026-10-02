@@ -89,6 +89,26 @@ export type WsServerMessage =
     };
 
 /**
+ * v0.4: one moral finding, in wire form.
+ *
+ * Structurally identical to `MoralFinding` from the coding-agent, but
+ * declared here rather than imported: this file is the protocol
+ * contract, and the desktop has a hand-maintained copy of it that must
+ * not gain a compile-time dependency on the server's internals. The
+ * two shapes are asserted to agree in v0.4-moral-seam-test.ts, which
+ * is the thing that stops them drifting apart again.
+ */
+export interface MoralFindingWire {
+  rule: string;
+  principle: number;
+  severity: 'note' | 'warn' | 'high';
+  tool: string;
+  summary: string;
+  consequence: string;
+  evidence?: string;
+}
+
+/**
  * Per-session event. Mirrors the AgentEvent union from agent-core
  * (we re-emit it as a tagged union over the wire) plus deqi-
  * specific extensions:
@@ -154,6 +174,13 @@ export type SessionEvent =
       request_id: string;
       tool_name: string;
       tool_input: unknown;
+      /**
+       * v0.4: why the user is being asked, when the moral layer is
+       * the reason rather than the permission mode. Empty/absent means
+       * this is an ordinary mode-based prompt, and the UI should not
+       * dress it up as a moral judgement.
+       */
+      moral?: MoralFindingWire[];
     }
   | { type: 'permission_resolved'; request_id: string; decision: string }
   | { type: 'info'; kind: 'info' | 'warning' | 'error'; text: string }
@@ -184,6 +211,28 @@ export type SessionEvent =
       toolName: string;
       hint: string;
       kind: 'error' | 'empty' | 'large';
+    }
+  // ── v0.4: the moral layer ────────────────────────────────────
+  // Three forms, three events. `moral_audit` fires for EVERY tool
+  // call that produced a finding (form A — visible, never blocks).
+  // `turn_review` fires once per turn (form C — the retrospective).
+  // Form B is not an event: it is the escalation of a
+  // `permission_request` whose `moral` field is non-empty.
+  | {
+      type: 'moral_audit';
+      tool: string;
+      findings: MoralFindingWire[];
+    }
+  | {
+      type: 'turn_review';
+      /** Null when there is nothing worth saying. */
+      headline: string | null;
+      /** Descriptive pattern, not a verdict. Null when unremarkable. */
+      observation: string | null;
+      high: number;
+      warn: number;
+      note: number;
+      findings: MoralFindingWire[];
     };
 
 // ─── REST payloads ────────────────────────────────────────────────

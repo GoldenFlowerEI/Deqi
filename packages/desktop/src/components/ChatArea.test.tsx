@@ -7,7 +7,7 @@
 import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { ChatArea } from './ChatArea';
-import type { SessionEvent } from '../lib/types';
+import type { SessionEvent, MoralFindingWire } from '../lib/types';
 
 function ev(partial: Partial<SessionEvent>): SessionEvent {
   return partial as SessionEvent;
@@ -285,6 +285,137 @@ describe('ChatArea', () => {
         />,
       );
       expect(container.querySelectorAll('.msg-chip-subagent')).toHaveLength(3);
+    });
+  });
+
+  // v0.4 — the moral layer. These are the only two chip kinds that
+  // expand, so the assertions are about both halves: the headline the
+  // user sees without clicking, and the reasoning they get after.
+  describe('moral layer', () => {
+    const finding = (over: Partial<MoralFindingWire> = {}): MoralFindingWire => ({
+      rule: 'rm-recursive',
+      principle: 5,
+      severity: 'high',
+      tool: 'bash',
+      summary: 'Recursively deleting files.',
+      consequence:
+        'Anything matched is gone immediately. The agent cannot undo it, and a path that looks narrower than it is will take a whole tree with it.',
+      evidence: 'rm -rf build',
+      ...over,
+    });
+
+    it('renders a moral_audit as a collapsed chip', () => {
+      const { container } = render(
+        <ChatArea
+          events={[ev({
+            type: 'moral_audit',
+            tool: 'bash',
+            findings: [finding()],
+          } as Partial<SessionEvent>)]}
+          userPrompts={['clean up']}
+          busy={false}
+        />,
+      );
+      const chip = container.querySelector('.msg-chip-moral');
+      expect(chip).toBeInTheDocument();
+      expect(chip).toHaveAttribute('data-severity', 'high');
+      expect(screen.getByText('Recursively deleting files.')).toBeInTheDocument();
+    });
+
+    it('shows the principle and the consequence, so the flag is arguable', () => {
+      const { container } = render(
+        <ChatArea
+          events={[ev({
+            type: 'moral_audit',
+            tool: 'bash',
+            findings: [finding()],
+          } as Partial<SessionEvent>)]}
+          userPrompts={['clean up']}
+          busy={false}
+        />,
+      );
+      // A moral layer the user cannot read is a vibe. The principle
+      // number is the handle for arguing with it.
+      expect(screen.getByText('principle 5')).toBeInTheDocument();
+      expect(screen.getByText(/gone immediately/)).toBeInTheDocument();
+      expect(container.querySelector('.moral-evidence')?.textContent).toBe('rm -rf build');
+    });
+
+    it('collapses additional findings behind a count', () => {
+      render(
+        <ChatArea
+          events={[ev({
+            type: 'moral_audit',
+            tool: 'bash',
+            findings: [
+              finding(),
+              finding({ rule: 'secret-in-command', principle: 8, severity: 'warn', summary: 'A command line containing what looks like a credential.' }),
+            ],
+          } as Partial<SessionEvent>)]}
+          userPrompts={['do a thing']}
+          busy={false}
+        />,
+      );
+      expect(screen.getByText(/\+1 more/)).toBeInTheDocument();
+    });
+
+    it('renders a turn_review with its observation and counts', () => {
+      const { container } = render(
+        <ChatArea
+          events={[ev({
+            type: 'turn_review',
+            headline: '1 irreversible action: rm-recursive',
+            observation: '1 irreversible action · 2 tool calls',
+            high: 1,
+            warn: 0,
+            note: 0,
+            findings: [finding()],
+          } as Partial<SessionEvent>)]}
+          userPrompts={['clean up']}
+          busy={false}
+        />,
+      );
+      const chip = container.querySelector('.msg-chip-review');
+      expect(chip).toBeInTheDocument();
+      expect(screen.getByText(/1 irreversible action: rm-recursive/)).toBeInTheDocument();
+      expect(screen.getByText(/1 high/)).toBeInTheDocument();
+    });
+
+    it('drops a review with nothing to say rather than showing an empty chip', () => {
+      // The server is supposed not to send these, but the UI must not
+      // depend on that: an empty review chip on every ordinary turn is
+      // exactly how a moral layer gets ignored.
+      const { container } = render(
+        <ChatArea
+          events={[ev({
+            type: 'turn_review',
+            headline: null,
+            observation: null,
+            high: 0,
+            warn: 0,
+            note: 0,
+            findings: [],
+          } as Partial<SessionEvent>)]}
+          userPrompts={['q']}
+          busy={false}
+        />,
+      );
+      expect(container.querySelector('.msg-chip-review')).toBeNull();
+    });
+
+    it('does not render a moral chip for an empty audit', () => {
+      const { container } = render(
+        <ChatArea
+          events={[ev({
+            type: 'moral_audit',
+            tool: 'read',
+            findings: [],
+          } as Partial<SessionEvent>)]}
+          userPrompts={['q']}
+          busy={false}
+        />,
+      );
+      expect(container.querySelector('.msg-chip-moral')).toBeNull();
     });
   });
 });

@@ -10,6 +10,22 @@
 
 export type PermissionMode = 'autonomous' | 'smart' | 'manual' | 'chat_only';
 
+/**
+ * v0.4: one moral finding, in wire form. The shape the server sends
+ * and this UI renders — deliberately flat and self-contained, so a
+ * chip can show "why" without the component knowing anything about
+ * the rules that produced the finding.
+ */
+export interface MoralFindingWire {
+  rule: string;
+  principle: number;
+  severity: 'note' | 'warn' | 'high';
+  tool: string;
+  summary: string;
+  consequence: string;
+  evidence?: string;
+}
+
 // ─── Server → Client (WS events) ─────────────────────────────────
 
 export type SessionEvent =
@@ -42,6 +58,12 @@ export type SessionEvent =
       request_id: string;
       tool_name: string;
       tool_input: unknown;
+      /**
+       * v0.4: present and non-empty only when the moral layer is why
+       * the user is being asked. Absent means an ordinary
+       * mode-based prompt.
+       */
+      moral?: MoralFindingWire[];
     }
   | { type: 'permission_resolved'; request_id: string; decision: string }
   | { type: 'info'; kind: 'info' | 'warning' | 'error'; text: string }
@@ -89,6 +111,25 @@ export type SessionEvent =
         event?: { type: string; delta?: string };
         [k: string]: unknown;
       };
+    }
+  // ── v0.4: the moral layer ────────────────────────────────────
+  // Hand-maintained to match server/src/types.ts. The two are asserted
+  // to agree in v0.4-moral-seam-test.ts — that test exists because this
+  // file already drifted once (subagent_event), silently deleting a
+  // whole feature from the UI while the server kept sending it.
+  | {
+      type: 'moral_audit';
+      tool: string;
+      findings: MoralFindingWire[];
+    }
+  | {
+      type: 'turn_review';
+      headline: string | null;
+      observation: string | null;
+      high: number;
+      warn: number;
+      note: number;
+      findings: MoralFindingWire[];
     };
 
 export type WsServerMessage =

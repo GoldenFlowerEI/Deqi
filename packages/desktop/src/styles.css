@@ -985,6 +985,102 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* ─── The moral layer (v0.4) ────────────────────────────────────
+   These two chips are the only ones that expand. A finding the user
+   cannot open is a finding they have to either obey or ignore
+   blindly, and an obedient-or-blind agent is the thing this feature
+   exists to avoid. <details> gives collapse with no state.
+
+   Severity is carried by a left border and a text tint rather than a
+   red/amber/green fill: this is a description of an action, not a
+   score for the agent. */
+.msg-chip-moral,
+.msg-chip-review {
+  display: block;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+.msg-chip-moral > summary,
+.msg-chip-review > summary {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  cursor: pointer;
+  list-style: none;
+  color: inherit;
+}
+.msg-chip-moral > summary::-webkit-details-marker,
+.msg-chip-review > summary::-webkit-details-marker { display: none; }
+.msg-chip-moral > summary::before,
+.msg-chip-review > summary::before {
+  content: '▸';
+  font-size: 9px;
+  opacity: 0.6;
+  transition: transform 120ms ease;
+}
+.msg-chip-moral[open] > summary::before,
+.msg-chip-review[open] > summary::before { transform: rotate(90deg); }
+
+.msg-chip-moral { border-left-width: 3px; }
+.msg-chip-moral[data-severity="note"] {
+  color: var(--fg-dim);
+  border-left-color: rgba(160, 160, 180, 0.5);
+}
+.msg-chip-moral[data-severity="warn"] {
+  color: #f9e2af;
+  border-color: rgba(249, 226, 175, 0.28);
+  border-left-color: #f9e2af;
+}
+.msg-chip-moral[data-severity="high"] {
+  color: #f38ba8;
+  border-color: rgba(243, 139, 168, 0.32);
+  border-left-color: #f38ba8;
+}
+.msg-chip-review { border-left-color: rgba(166, 227, 161, 0.6); }
+.msg-chip-review .review-counts { opacity: 0.7; }
+
+.moral-detail {
+  margin-top: 6px;
+  padding-left: 14px;
+  border-left: 1px solid rgba(160, 160, 180, 0.18);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.moral-item { font-size: 0.95em; }
+.moral-item-head {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+.moral-item[data-severity="high"] .moral-item-head strong { color: #f38ba8; }
+.moral-item[data-severity="warn"] .moral-item-head strong { color: #f9e2af; }
+.moral-principle {
+  color: var(--fg-dim);
+  font-size: 0.85em;
+  opacity: 0.75;
+  font-variant-numeric: tabular-nums;
+}
+.moral-consequence {
+  margin: 2px 0 0;
+  color: var(--fg-dim);
+  line-height: 1.45;
+}
+.moral-evidence {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.28);
+  color: var(--fg-dim);
+  font-size: 0.85em;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .busy {
   align-self: flex-start;
   color: var(--fg-dim);
