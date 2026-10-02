@@ -28,6 +28,35 @@ export interface MoralFindingWire {
 
 // ─── Server → Client (WS events) ─────────────────────────────────
 
+/**
+ * v0.4: the line diff, mirroring `coding-agent/src/diff.ts`.
+ *
+ * Declared locally rather than imported: the desktop has no workspace
+ * dependency on the coding-agent, and adding one to share two type
+ * declarations would create the circular graph the header comment
+ * above describes. The shapes are asserted to agree in
+ * v0.4-moral-seam-test.ts.
+ */
+export type DiffOp = 'ctx' | 'add' | 'del';
+
+export interface DiffLine {
+  op: DiffOp;
+  text: string;
+  oldNo?: number;
+  newNo?: number;
+}
+
+export interface FileDiff {
+  path: string;
+  change: 'created' | 'modified' | 'deleted';
+  lines: DiffLine[];
+  added: number;
+  removed: number;
+  truncated: boolean;
+  /** Set when the file was too large to line-diff. */
+  tooLarge?: boolean;
+}
+
 export type SessionEvent =
   | { type: 'agent_start'; model: string }
   | { type: 'agent_end'; usage: { input: number; output: number; cost_usd?: number } }
@@ -52,6 +81,8 @@ export type SessionEvent =
       output: string;
       is_error: boolean;
       duration_ms: number;
+      /** v0.4: a line diff for `write` / `edit`. See server types. */
+      diff?: unknown;
     }
   | {
       type: 'permission_request';

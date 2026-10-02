@@ -28,6 +28,9 @@ export {
   type ToolUse,
   type TurnReview,
 } from './moral.js';
+// v0.4: line diffs, so the harness can show what a write/edit actually
+// changed rather than "Updated src/index.ts (4,201 bytes)".
+export { diffLines, makeFileDiff, type DiffOp, type DiffLine, type FileDiff } from './diff.js';
 export { ToolMasteryTracker, type MasteryLevel, attachMasteryTracker } from './tool-mastery.js';
 export { UserModel, USER_MODEL_TOPICS, type UserModelTopic, type UserModelObservation } from './user-model.js';
 export {

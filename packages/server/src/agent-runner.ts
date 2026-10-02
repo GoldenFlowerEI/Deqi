@@ -1010,6 +1010,15 @@ export function mapAgentEvent(ev: AgentEvent): SessionEvent {
           .trim(),
         is_error: ev.result.isError === true,
         duration_ms: Math.round(ev.durationMs),
+        // v0.4: the write/edit tools attach a line diff to
+        // `details`, which agent-core documents as metadata the model
+        // does not see. This is the only place it becomes visible —
+        // the user. Typed as `unknown` here and narrowed on the
+        // desktop, because the wire is where a bad shape should be
+        // survivable rather than fatal.
+        ...(ev.result.details && 'diff' in ev.result.details
+          ? { diff: (ev.result.details as { diff: unknown }).diff }
+          : {}),
       };
     case 'error':
       return { type: 'info', kind: 'error', text: ev.message };

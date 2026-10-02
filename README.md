@@ -37,10 +37,12 @@ Intelligence); this is the v0.1.0 rebrand under the Deqi name.
 | **Server**             | 22 built-in tools, 5 plugin surfaces (tool/route/event/capability/log). Per-session permission grants (turn / session / forever). |
 | **Permissions**        | 4 modes — `plan`, `default`, `accept-edits`, `bypass-permissions` — plus the legacy `chat_only`. Every tool call is classified (`read` / `plan` / `mutate` / `shell` / `network` / `escalate`) and the gate **fails closed**: a tool with no classification asks. |
 | **Moral layer**        | 13 rules anchored to the numbered constitution principles, in three forms: **A** every finding is shown as an expandable chip as it happens, **B** an irreversible action gets one extra confirmation even in a mode that would allow it, **C** each turn closes with a short factual review. It can raise a verdict but never lower one — it never denies. See below. |
+| **Diffs**             | `write` and `edit` compute a line diff where the before and after text both exist — on the server, in the tool — and stream it on `tool_end`. The client never has to guess what changed. |
+| **Rendering**         | Assistant replies are Markdown (GFM tables, fenced code with a language label and a copy button). Tool inputs lead with the argument that identifies the call; bulk fields like a file body are summarised, and the full input is one click away. |
 | **Plugins**            | 6 official: `deqi-plugin-{browser, browser-v2, git, hello, http-fetch, stamp}`. Hot-reload, capability allowlist, optional. |
 | **Stack**              | Tauri 2 · React 18 · Vite 5 · Bun · TypeScript · WebView2 (Windows) · WebKit (macOS/Linux). |
 | **Provider support**   | Anthropic · OpenAI · Google · OpenAI-compatible (13 models registered by default; pick from the model dropdown). |
-| **Tests**              | 56 harness suites in `examples/smoke/` (~1400 assertions) + 199 desktop unit tests. `bun run test` runs both. |
+| **Tests**              | 57 harness suites in `examples/smoke/` (~1500 assertions) + 239 desktop unit tests. `bun run test` runs both. |
 
 ## The moral layer
 

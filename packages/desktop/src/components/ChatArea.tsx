@@ -19,6 +19,9 @@
 
 import { useEffect, useRef } from 'react';
 import type { SessionEvent, MoralFindingWire } from '../lib/types';
+import { Markdown } from './Markdown';
+import { summarizeToolInput } from '../lib/tool-input';
+import { DiffView } from './DiffView';
 
 interface ChatAreaProps {
   events: SessionEvent[];
@@ -37,6 +40,8 @@ interface Block {
   toolOutput?: string;
   toolError?: boolean;
   toolDurationMs?: number;
+  /** v0.4: the line diff for write/edit, as it arrived on the wire. */
+  toolDiff?: unknown;
   // For sub-agent blocks (v0.3). `subagentStep` is a human label for
   // what the sub-agent is doing right now; the raw event carries far
   // more than the UI needs to show.
@@ -108,7 +113,12 @@ function BlockView({ block }: { block: Block }) {
     return (
       <div className="msg msg-assistant">
         <div className="msg-author">Deqi</div>
-        <div className="msg-body">{block.text}</div>
+        <div className="msg-body">
+          {/* v0.4: rendered as Markdown. It was plain text, so a reply
+              containing a diff, a list or a fenced block arrived as
+              one undifferentiated wall. */}
+          <Markdown>{block.text}</Markdown>
+        </div>
       </div>
     );
   }
@@ -125,19 +135,39 @@ function BlockView({ block }: { block: Block }) {
     );
   }
   if (block.kind === 'tool') {
+    // v0.4: the input used to be dumped as full JSON with no
+    // disclosure, so a 400-line `write` buried the conversation. Now
+    // the identifying field leads, bulk text is summarised, and the
+    // raw input is one click away.
+    const s = block.toolInput !== undefined
+      ? summarizeToolInput(block.toolName ?? '', block.toolInput)
+      : null;
     return (
       <div className={`msg msg-tool ${block.toolError ? 'error' : ''}`}>
         <div className="msg-tool-header">
           <span className="tool-name">⚙ {block.toolName ?? '?'}</span>
+          {s && s.summary ? <span className="tool-summary">{s.summary}</span> : null}
           {block.toolDurationMs !== undefined && (
             <span className="tool-duration">{block.toolDurationMs}ms</span>
           )}
         </div>
-        {block.toolInput !== undefined && (
-          <pre className="tool-input">{JSON.stringify(block.toolInput, null, 2)}</pre>
+        {s && (
+          <details className="tool-input-details">
+            <summary>input</summary>
+            <pre className="tool-input">{s.preview}</pre>
+          </details>
         )}
+        {/* v0.4: what the write/edit actually changed. The tool's own
+            one-line summary is below it; the diff is the part the
+            user came to see. */}
+        <DiffView raw={block.toolDiff} />
         {block.toolOutput && (
-          <pre className="tool-output">{block.toolOutput}</pre>
+          <details className="tool-input-details" open={!!block.toolError}>
+            <summary>
+              output{block.toolError ? ' (error)' : ''}
+            </summary>
+            <pre className="tool-output">{block.toolOutput}</pre>
+          </details>
         )}
       </div>
     );
@@ -337,7 +367,7 @@ function useMemoBlocks(events: SessionEvent[], userPrompts: string[]): Block[] {
     textDeltas: string[];   // runs of text_delta, concatenated
     thinking: string;       // live thinking
     toolStarts: Array<{ name: string; input: unknown; toolUseId: string }>;
-    toolEnds: Map<string, { output: string; is_error: boolean; duration_ms: number }>;
+    toolEnds: Map<string, { output: string; is_error: boolean; duration_ms: number; diff?: unknown }>;
     info: string[];         // info lines
     ambient: AmbientEvent[]; // v3.6/v3.7 ambient events
   }
@@ -508,6 +538,7 @@ function useMemoBlocks(events: SessionEvent[], userPrompts: string[]): Block[] {
         toolOutput: end?.output,
         toolError: end?.is_error ?? false,
         toolDurationMs: end?.duration_ms,
+        toolDiff: end?.diff,
       });
     }
     for (const info of turn.info) {

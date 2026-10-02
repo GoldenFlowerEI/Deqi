@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs';
 import { isAbsolute, resolve } from 'node:path';
 import type { AgentTool, ToolExecutionContext, ToolExecutionResult } from '@deqi/agent-core';
 import { withinCwd } from './util.js';
+import { makeFileDiff } from '../diff.js';
 
 /**
  * Surgical file edit. oldText must match EXACTLY once.
@@ -75,6 +76,12 @@ export const editTool: AgentTool = {
     await writeFile(abs, updated, 'utf8');
     return {
       content: [{ type: 'text', text: `Edited ${abs}` }],
+      // v0.4: the real before and after are both in hand here, so the
+      // UI can show the lines that moved rather than "Edited …".
+      // `details` never reaches the model — it is the same slot the
+      // agent-core documents as "metadata the LLM does not see", so
+      // this costs the agent nothing.
+      details: { diff: makeFileDiff(a.path, text, updated) },
     };
   },
 };

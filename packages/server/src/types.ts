@@ -168,6 +168,14 @@ export type SessionEvent =
       output: string;
       is_error: boolean;
       duration_ms: number;
+      /**
+       * v0.4: a line diff, for `write` and `edit`. Computed on the
+       * server where the before and after text both exist; the client
+       * never has to guess what changed. `unknown` on purpose — a
+       * malformed diff should render as nothing, not crash the
+       * reducer. The desktop narrows it before use.
+       */
+      diff?: unknown;
     }
   | {
       type: 'permission_request';

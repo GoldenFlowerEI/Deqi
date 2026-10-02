@@ -1,8 +1,9 @@
-import { writeFile, mkdir } from 'node:fs/promises';
+import { writeFile, mkdir, readFile } from 'node:fs/promises';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import { existsSync } from 'node:fs';
 import type { AgentTool, ToolExecutionContext, ToolExecutionResult } from '@deqi/agent-core';
 import { withinCwd } from './util.js';
+import { makeFileDiff } from '../diff.js';
 
 export const writeTool: AgentTool = {
   name: 'write',
@@ -35,6 +36,15 @@ export const writeTool: AgentTool = {
     const existed = existsSync(abs);
     try {
       await mkdir(dirname(abs), { recursive: true });
+      // v0.4: read the previous contents BEFORE overwriting. A full
+      // rewrite is the one edit where the user most needs to see what
+      // the file was — and the only moment it is still available. If
+      // the read fails we still write; a missing diff is better than a
+      // failed save, and the file's history is not this tool's job.
+      let previous: string | null = null;
+      if (existed) {
+        try { previous = await readFile(abs, 'utf8'); } catch { previous = null; }
+      }
       await writeFile(abs, a.content, 'utf8');
       return {
         content: [
@@ -43,6 +53,7 @@ export const writeTool: AgentTool = {
             text: `${existed ? 'Updated' : 'Created'} ${abs} (${a.content.length} bytes)`,
           },
         ],
+        details: { diff: makeFileDiff(a.path, previous, a.content) },
       };
     } catch (err) {
       return {
