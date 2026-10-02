@@ -23,6 +23,8 @@
  */
 
 import { Component, type ErrorInfo, type ReactNode } from 'react';
+import { translate, type Lang, type MsgKey } from '../lib/i18n';
+import { useLang } from '../lib/useLang';
 
 interface Props {
   children: ReactNode;
@@ -30,8 +32,19 @@ interface Props {
   resetKey?: unknown;
   /** Replaces the default message. */
   label?: string;
+  /**
+   * The active language, for the default copy. A class component
+   * cannot call `useLang()`, so the value is passed in — and it also
+   * means the boundary re-renders its message when the user switches
+   * language, which is what they expect after clicking the toggle.
+   */
+  lang?: Lang;
+  t?: (key: MsgKey) => string;
   onError?: (err: Error, info: ErrorInfo) => void;
 }
+
+/** Stand-in used when the boundary is rendered without a provider. */
+const fallbackT = (key: MsgKey): string => translate('en', key);
 
 interface State {
   error: Error | null;
@@ -70,14 +83,17 @@ export class ErrorBoundary extends Component<Props, State> {
   override render(): ReactNode {
     const { error } = this.state;
     if (!error) return this.props.children;
+    // The default copy comes from the dictionary rather than being
+    // hardcoded here: a boundary message is the one string a user is
+    // guaranteed to read, so it must be in whatever language they
+    // chose. A custom `label` still wins.
+    const t = this.props.t ?? fallbackT;
     return (
       <div className="boundary boundary-error" role="alert">
-        <div className="boundary-title">{this.props.label ?? 'Something went wrong here.'}</div>
-        <p className="boundary-body">
-          The rest of the app is still running — this part could not be displayed.
-        </p>
+        <div className="boundary-title">{this.props.label ?? t('boundary.block')}</div>
+        <p className="boundary-body">{t('boundary.stillRunning')}</p>
         <button type="button" className="boundary-retry" onClick={this.reset}>
-          Try again
+          {t('boundary.retry')}
         </button>
       </div>
     );
@@ -90,8 +106,9 @@ export class ErrorBoundary extends Component<Props, State> {
  * readable — which is the entire point of having it.
  */
 export function BlockBoundary({ children, label }: { children: ReactNode; label?: string }) {
+  const { lang, t } = useLang();
   return (
-    <ErrorBoundary label={label ?? 'A message could not be displayed.'} resetKey={children}>
+    <ErrorBoundary label={label ?? undefined} lang={lang} t={t} resetKey={children}>
       {children}
     </ErrorBoundary>
   );

@@ -29,8 +29,10 @@
 import { useCallback, useState, type ReactNode } from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { useLang } from '../lib/useLang';
 
 function CodeBlock({ className, children }: { className?: string; children?: ReactNode }) {
+  const { t } = useLang();
   const [copied, setCopied] = useState(false);
   // react-markdown puts the language on the className as
   // `language-tsx`; inline code has no className at all.
@@ -61,7 +63,7 @@ function CodeBlock({ className, children }: { className?: string; children?: Rea
       <div className="md-code-bar">
         <span className="md-code-lang">{lang ?? 'text'}</span>
         <button type="button" className="md-code-copy" onClick={copy}>
-          {copied ? 'copied' : 'copy'}
+          {copied ? t('chat.copied') : t('chat.copy')}
         </button>
       </div>
       <pre className="md-code-body"><code>{text}</code></pre>

@@ -23,6 +23,7 @@ import { Markdown } from './Markdown';
 import { summarizeToolInput } from '../lib/tool-input';
 import { DiffView } from './DiffView';
 import { BlockBoundary } from './ErrorBoundary';
+import { useLang } from '../lib/useLang';
 
 interface ChatAreaProps {
   events: SessionEvent[];
@@ -70,6 +71,7 @@ interface Block {
 }
 
 export function ChatArea({ events, userPrompts, busy }: ChatAreaProps) {
+  const { t } = useLang();
   const blocks = useMemoBlocks(events, userPrompts);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -85,7 +87,7 @@ export function ChatArea({ events, userPrompts, busy }: ChatAreaProps) {
       <div className="chat-area" ref={scrollRef}>
         <div className="empty">
           <h2>Deqi</h2>
-          <p>Type a task below to start. Deqi can read, write, edit, and run shell commands on your behalf.</p>
+          <p>{t('chat.empty.hint')}</p>
         </div>
       </div>
     );
@@ -103,16 +105,17 @@ export function ChatArea({ events, userPrompts, busy }: ChatAreaProps) {
           <BlockView block={b} />
         </BlockBoundary>
       ))}
-      {busy && <div className="busy">● working…</div>}
+      {busy && <div className="busy">● {t('chat.busy')}</div>}
     </div>
   );
 }
 
 function BlockView({ block }: { block: Block }) {
+  const { t } = useLang();
   if (block.kind === 'user') {
     return (
       <div className="msg msg-user">
-        <div className="msg-author">❯ you</div>
+        <div className="msg-author">❯ {t('chat.you')}</div>
         <div className="msg-body">{block.text}</div>
       </div>
     );
@@ -138,7 +141,7 @@ function BlockView({ block }: { block: Block }) {
     // are empty (e.g. an open streaming block).
     return (
       <div className="msg msg-thinking">
-        💭 {block.text || 'thinking…'}
+        💭 {block.text || t('chat.thinking')}
       </div>
     );
   }
@@ -161,7 +164,7 @@ function BlockView({ block }: { block: Block }) {
         </div>
         {s && (
           <details className="tool-input-details">
-            <summary>input</summary>
+            <summary>{t('chat.toolInput')}</summary>
             <pre className="tool-input">{s.preview}</pre>
           </details>
         )}
@@ -172,7 +175,7 @@ function BlockView({ block }: { block: Block }) {
         {block.toolOutput && (
           <details className="tool-input-details" open={!!block.toolError}>
             <summary>
-              output{block.toolError ? ' (error)' : ''}
+              {block.toolError ? t('chat.toolOutputError') : t('chat.toolOutput')}
             </summary>
             <pre className="tool-output">{block.toolOutput}</pre>
           </details>
@@ -193,7 +196,7 @@ function BlockView({ block }: { block: Block }) {
     return (
       <div className="msg msg-chip msg-chip-memory" title={block.memoryQuery ?? ''}>
         <span className="chip-icon">🧠</span>
-        <span className="chip-text">remembered {parts.join(', ') || 'nothing'}</span>
+        <span className="chip-text">{t('chat.memory')} {parts.join(', ')}</span>
       </div>
     );
   }
@@ -201,7 +204,7 @@ function BlockView({ block }: { block: Block }) {
     return (
       <div className="msg msg-chip msg-chip-skills">
         <span className="chip-icon">🛠</span>
-        <span className="chip-text">suggested {block.skillsList?.map((s) => `${s.name} (${s.score.toFixed(2)})`).join(', ')}</span>
+        <span className="chip-text">{t('chat.skills')} {block.skillsList?.map((s) => `${s.name} (${s.score.toFixed(2)})`).join(', ')}</span>
       </div>
     );
   }
@@ -303,7 +306,7 @@ function BlockView({ block }: { block: Block }) {
         <summary>
           <span className="chip-icon">⚖</span>
           <span className="chip-text">
-            {block.reviewHeadline ?? block.reviewObservation ?? 'turn review'}
+            {block.reviewHeadline ?? block.reviewObservation ?? t('chat.reviewHeadline')}
             {counts.length > 0 ? <span className="review-counts"> · {counts.join(' · ')}</span> : null}
           </span>
         </summary>

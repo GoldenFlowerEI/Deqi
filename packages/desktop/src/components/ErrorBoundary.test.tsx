@@ -10,6 +10,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { ErrorBoundary, BlockBoundary } from './ErrorBoundary';
+import { LangProvider } from '../lib/useLang';
+import { translate } from '../lib/i18n';
 
 function Boom({ message = 'kaboom' }: { message?: string }): JSX.Element {
   throw new Error(message);
@@ -34,7 +36,11 @@ describe('ErrorBoundary', () => {
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
     render(<ErrorBoundary><Boom /></ErrorBoundary>);
     expect(screen.getByRole('alert')).toBeInTheDocument();
-    expect(screen.getByText(/could not recover|could not be displayed/i)).toBeInTheDocument();
+    // Exact, not a substring regex. An earlier version matched on
+    // "could not be displayed", which appears in BOTH the title and
+    // the body — it only passed because the title happened to say
+    // something else. The moment both were localised it matched twice.
+    expect(screen.getByText('A message could not be displayed.')).toBeInTheDocument();
     spy.mockRestore();
   });
 
@@ -53,6 +59,30 @@ describe('ErrorBoundary', () => {
     render(<ErrorBoundary onError={onError}><Boom message="the real cause" /></ErrorBoundary>);
     expect(onError).toHaveBeenCalled();
     expect((onError.mock.calls[0]![0] as Error).message).toBe('the real cause');
+    spy.mockRestore();
+  });
+
+  it('localises its own copy', () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    // The boundary message is the one string a user is guaranteed to
+    // read, so it has to follow the language they chose.
+    render(
+      <LangProvider>
+        <ErrorBoundary lang="zh" t={(k) => translate('zh', k)}><Boom /></ErrorBoundary>
+      </LangProvider>,
+    );
+    expect(screen.getByText('这条消息无法显示。')).toBeInTheDocument();
+    expect(screen.getByText('重试')).toBeInTheDocument();
+    spy.mockRestore();
+  });
+
+  it('still honours an explicit label over the dictionary', () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    render(<ErrorBoundary label="Custom."><Boom /></ErrorBoundary>);
+    expect(screen.getByText('Custom.')).toBeInTheDocument();
+    // …but the body and the button are still localised, because the
+    // label only overrides the headline.
+    expect(screen.getByText('Try again')).toBeInTheDocument();
     spy.mockRestore();
   });
 

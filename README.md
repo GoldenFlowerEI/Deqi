@@ -41,10 +41,11 @@ Intelligence); this is the v0.1.0 rebrand under the Deqi name.
 | **Rendering**         | Assistant replies are Markdown (GFM tables, fenced code with a language label and a copy button). Tool inputs lead with the argument that identifies the call; bulk fields like a file body are summarised, and the full input is one click away. |
 | **Introspection**     | The agent observes its own behaviour each turn and, opt-in via `DEQI_INTROSPECTION=1`, reflects on it and carries the result into the next system prompt. See below. |
 | **Resilience**        | Per-block React error boundaries, so one malformed event cannot blank the conversation. Light and dark themes, following the OS until you choose. |
+| **Language**          | English and Chinese. Follows the OS by default; a toggle sits in the status bar. Currently covers the chat loop, the error boundaries, the diff view and the status bar — the secondary views (Settings, Search, Schedule, Plugins, Web, Mobile, Feedback) are still English-only. |
 | **Plugins**            | 6 official: `deqi-plugin-{browser, browser-v2, git, hello, http-fetch, stamp}`. Hot-reload, capability allowlist, optional. |
 | **Stack**              | Tauri 2 · React 18 · Vite 5 · Bun · TypeScript · WebView2 (Windows) · WebKit (macOS/Linux). |
 | **Provider support**   | Anthropic · OpenAI · Google · OpenAI-compatible (13 models registered by default; pick from the model dropdown). |
-| **Tests**              | 58 harness suites in `examples/smoke/` (~1540 assertions) + 263 desktop unit tests. `bun run test` runs both. |
+| **Tests**              | 58 harness suites in `examples/smoke/` (~1540 assertions) + 318 desktop unit tests. `bun run test` runs both. |
 
 ## The moral layer
 

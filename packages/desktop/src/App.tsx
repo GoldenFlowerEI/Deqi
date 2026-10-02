@@ -36,6 +36,7 @@ import { SettingsView } from './components/SettingsView';
 import { MobileView } from './components/MobileView';
 import { FeedbackView } from './components/FeedbackView';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { LangProvider, useLang } from './lib/useLang';
 
 interface ProjectInfo {
   id: string;
@@ -87,6 +88,19 @@ interface AppState {
 }
 
 export function App() {
+  // v0.6: the language provider sits at the very top so the app-level
+  // error boundary's own copy is localised too — that string is the
+  // one a user is guaranteed to read, and it is the worst possible
+  // one to show them in a language they did not choose.
+  return (
+    <LangProvider>
+      <AppBody />
+    </LangProvider>
+  );
+}
+
+function AppBody() {
+  const { lang, t } = useLang();
   const apiRef = useRef(new DeqiApi(API_BASE));
   const wsRef = useRef<DeqiWebSocket | null>(null);
 
@@ -417,7 +431,9 @@ export function App() {
     // crash currently means a white window with an error the user
     // cannot see, which is the worst possible outcome.
     <ErrorBoundary
-      label="Deqi hit an error it could not recover from."
+      label={t('boundary.app')}
+      lang={lang}
+      t={t}
       resetKey={state.view}
     >
       <div className="app-v2">

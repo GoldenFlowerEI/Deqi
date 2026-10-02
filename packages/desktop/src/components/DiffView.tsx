@@ -9,6 +9,7 @@
  */
 
 import { type DiffLine, type FileDiff } from '../lib/types';
+import { useLang } from '../lib/useLang';
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -48,7 +49,9 @@ export function parseDiff(raw: unknown): FileDiff | null {
   };
 }
 
-export function DiffView({ raw }: { raw: unknown }) {  const diff = parseDiff(raw);
+export function DiffView({ raw }: { raw: unknown }) {
+  const { t } = useLang();
+  const diff = parseDiff(raw);
   if (!diff) return null;
   // A diff with nothing in it is not worth a collapsed row in the
   // transcript — the tool's own summary line already said it worked.
@@ -69,7 +72,7 @@ export function DiffView({ raw }: { raw: unknown }) {  const diff = parseDiff(ra
             <span className="diff-del">−{diff.removed}</span>
           </span>
         </div>
-        <p className="diff-note">Too large to show line by line.</p>
+        <p className="diff-note">{t('chat.diffTooLarge')}</p>
       </div>
     );
   }
@@ -102,7 +105,7 @@ export function DiffView({ raw }: { raw: unknown }) {  const diff = parseDiff(ra
           </div>
         ))}
       </div>
-      {diff.truncated ? <p className="diff-note">… diff truncated.</p> : null}
+      {diff.truncated ? <p className="diff-note">{t('chat.diffTruncated')}</p> : null}
     </div>
   );
 }

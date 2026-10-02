@@ -1330,18 +1330,21 @@ body {
 .diff-note { margin: 0; padding: 5px 9px; color: var(--fg-dim); font-style: italic; }
 .diff-too-large { padding-bottom: 2px; }
 
-.theme-toggle {
-  margin-left: auto;
+.status-toggle {
   background: transparent;
   border: 1px solid var(--border);
   border-radius: 4px;
   color: var(--fg-dim);
   cursor: pointer;
-  font-size: 12px;
+  font-size: 11px;
   line-height: 1;
   padding: 2px 7px;
+  margin-left: 6px;
 }
-.theme-toggle:hover { color: var(--fg); border-color: var(--fg-dim); }
+.status-toggle:hover { color: var(--fg); border-color: var(--fg-dim); }
+/* The first of the two right-hand toggles should not push the rest
+   off the strip; only the leading one needs the gap. */
+.status-bar .status-toggle:first-of-type { margin-left: auto; }
 
 /* ─── Error boundaries (v0.5) ─────────────────────────────────── */.boundary-error {
   align-self: stretch;

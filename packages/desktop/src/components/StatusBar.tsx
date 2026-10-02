@@ -9,6 +9,7 @@
 import { useEffect, useState } from 'react';
 import type { WsConnectionState } from '../lib/ws';
 import { applyTheme, initialTheme, initTheme, storeTheme, type Theme } from '../lib/theme';
+import { useLang } from '../lib/useLang';
 
 interface StatusBarProps {
   connection: WsConnectionState;
@@ -36,6 +37,7 @@ export function StatusBar({ connection, info, model }: StatusBarProps) {
   // ones where there is nothing else to click.
   const [theme, setTheme] = useState<Theme>(() => initialTheme());
   useEffect(() => initTheme(), []);
+  const { t, lang, setLang } = useLang();
 
   const toggle = (): void => {
     const next: Theme = theme === 'dark' ? 'light' : 'dark';
@@ -49,14 +51,23 @@ export function StatusBar({ connection, info, model }: StatusBarProps) {
       <span className="status-pill" style={{ color: STATE_COLOR[connection] }}>
         ● {STATE_LABEL[connection]}
       </span>
-      <span className="status-model">model: <code>{model}</code></span>
+      <span className="status-model">{t('status.model')} <code>{model}</code></span>
       {info && <span className="status-info">{info}</span>}
       <button
         type="button"
-        className="theme-toggle"
+        className="status-toggle"
+        onClick={() => setLang(lang === 'en' ? 'zh' : 'en')}
+        title={t('status.lang')}
+        aria-label={t('status.lang')}
+      >
+        {lang === 'en' ? '中文' : 'EN'}
+      </button>
+      <button
+        type="button"
+        className="status-toggle"
         onClick={toggle}
-        title={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
-        aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+        title={theme === 'dark' ? t('status.theme.light') : t('status.theme.dark')}
+        aria-label={theme === 'dark' ? t('status.theme.light') : t('status.theme.dark')}
       >
         {theme === 'dark' ? '☀' : '☾'}
       </button>
