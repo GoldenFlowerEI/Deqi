@@ -31,7 +31,7 @@ import { homedir } from 'node:os';
  * the tests were writing JSONL into the real `~/.deqi/sessions`. A
  * function keeps the lookup lazy so the override is honoured.
  */
-function deqiHome(): string {
+export function deqiHome(): string {
   return join(homedir(), '.deqi');
 }
 

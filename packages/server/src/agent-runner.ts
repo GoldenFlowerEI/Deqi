@@ -14,6 +14,7 @@
  */
 
 import { randomUUID } from 'node:crypto';
+import { join } from 'node:path';
 
 import {
   Agent,
@@ -22,7 +23,8 @@ import {
   type PermissionDecision,
 } from '@deqi/agent-core';
 import { ModelRegistry } from '@deqi/ai';
-import { BUILTIN_TOOLS, buildSystemPrompt, SessionManager, loadAgentsMd, ToolCache, retrieveRelevant, renderRetrievedMemory, suggestSkills, renderSkillSuggestions, reflectOnTool, findActivePlan, renderPlanProgress, retrieveCombined, bumpRetrievedUseCounts, UserModel, auditToolCall, blockingFindings, reviewTurn, type MoralFinding, type ToolUse } from '@deqi/coding-agent';
+import { DefaultIntrospectionLayer, type ReflectionReport } from '@deqi/introspection';
+import { BUILTIN_TOOLS, buildSystemPrompt, SessionManager, loadAgentsMd, ToolCache, retrieveRelevant, renderRetrievedMemory, suggestSkills, renderSkillSuggestions, reflectOnTool, findActivePlan, renderPlanProgress, retrieveCombined, bumpRetrievedUseCounts, UserModel, auditToolCall, blockingFindings, reviewTurn, deqiHome, type MoralFinding, type ToolUse } from '@deqi/coding-agent';
 import { migrateLegacyMode, modeAllows, modeLabel, type PermissionMode } from './permission-modes.js';
 import { GrantStore, type PermissionGrant, type GrantLevel } from './permission-grants.js';
 import type { ToolExecutionContext, ToolExecutionResult } from '@deqi/agent-core';
@@ -118,6 +120,30 @@ export type PermissionRequest = {
   resolve: (decision: 'allow' | 'allow_session' | 'deny') => void;
 };
 
+/**
+ * Whether the introspection layer may spend an LLM call.
+ *
+ * Opt-in via `DEQI_INTROSPECTION=1`, because each reflection is a
+ * billed model call the user never asked for. Only the set of values
+ * that reads as a deliberate yes counts: a truthiness check would let
+ * `DEQI_INTROSPECTION=0` and `=false` through, which is the kind of
+ * flag that appears to be off and is not.
+ */
+function introspectionEnabled(_modelId: string): boolean {
+  const raw = (process.env.DEQI_INTROSPECTION ?? '').trim().toLowerCase();
+  return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on';
+}
+
+/** One line for the `reflection` wire event. The report keeps three
+ *  lists; the chat shows the actionable one, because that is what the
+ *  user can do something about. */
+function renderReflectionNote(r: ReflectionReport): string {
+  if (r.nextSteps.length > 0) return r.nextSteps[0]!;
+  if (r.misaligned.length > 0) return r.misaligned[0]!;
+  if (r.aligned.length > 0) return r.aligned[0]!;
+  return 'self-reflection produced nothing to act on';
+}
+
 export class AgentRunner {
   private agent: Agent;
   private session: SessionManager;
@@ -164,6 +190,14 @@ export class AgentRunner {
    */
   private turnFindings: MoralFinding[] = [];
   private turnUses: ToolUse[] = [];
+  /**
+   * v0.6: the introspection layer and its subscription. Kept as
+   * fields rather than locals because both outlive `init()` — the
+   * subscription is what forwards reflections to the wire, and it
+   * has to be torn down when the runner is.
+   */
+  private introspection: DefaultIntrospectionLayer | null = null;
+  private introspectionUnsubscribe: (() => void) | null = null;
   /**
    * v4.4: per-session permission grants. The user can pre-approve
    * tools at the 'turn' / 'session' / 'forever' level. The
@@ -326,6 +360,35 @@ export class AgentRunner {
     };
     this.harness = harness;
 
+    // v0.6: the introspection layer. agent-core has had the full
+    // seam since v0.4 — observeAndReset() runs on every turn, the
+    // snapshot carries tool usage / files touched / notes, and
+    // getGuidance() is prepended to the system prompt — but nothing
+    // ever passed a layer in, so every one of those was a branch
+    // that could not be taken. Same shape as `evaluatePermission`
+    // having zero call sites: the parts existed, the connection did
+    // not, and nothing failed.
+    //
+    // The LLM half is opt-in (DEQI_INTROSPECTION=1) because each
+    // reflection is a billed model call the user never asked for.
+    // The bookkeeping half is always on and free.
+    this.introspection = new DefaultIntrospectionLayer({
+      registry: this.registry,
+      enabled: introspectionEnabled(this.optsModelId),
+      persistencePath: join(deqiHome(), 'reflections.jsonl'),
+    });
+    this.introspectionUnsubscribe = this.introspection.subscribe((ev) => {
+      if (ev.type !== 'reflection_emitted') return;
+      const report = ev.payload as ReflectionReport;
+      // `reflection` is a wire event that has been in the protocol
+      // since v3.7 and was never emitted by anything. This is the
+      // first producer; ChatArea already renders it as a chip.
+      this.turnSessionEmit?.({
+        type: 'reflection',
+        note: renderReflectionNote(report),
+      });
+    });
+
     // v0.3: EVERY tool goes through the permission gate, including
     // plugin-provided ones. Plugin tools are third-party code reached
     // over the model's tool list; leaving them ungated would make
@@ -339,6 +402,7 @@ export class AgentRunner {
       cwd: this.cwd,
       maxTurns: 50,
       harness,
+      introspection: this.introspection,
       // v3.7 → v3.12: pre-call hook. Runs once per run() on the
       // first turn. Combines (v3.12) combined semantic + Jaccard
       // retrieval + skill suggestions + (v3.9.1) active plan

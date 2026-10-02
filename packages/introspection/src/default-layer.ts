@@ -42,6 +42,21 @@ export interface DefaultLayerConfig {
   /** How often to trigger reflect() (every Nth observe). */
   reflectEvery?: number;
   /**
+   * v0.6: whether the layer may call the LLM.
+   *
+   * Defaults to true, because constructing this class IS the decision
+   * to use it. The question this flag exists for — "should we spend
+   * tokens the user did not agree to?" — belongs to whoever can see
+   * the bill, which is the server, not the layer. Turning it off here
+   * by default would mean a server that forgot to pass the flag got a
+   * silently inert layer, which is the exact failure mode this whole
+   * change is fixing.
+   *
+   * See AgentRunner in packages/server/src/agent-runner.ts, which
+   * passes `enabled: DEQI_INTROSPECTION=1`.
+   */
+  enabled?: boolean;
+  /**
    * v3.9.1: path to a JSONL file where each reflection report is
    * appended. When set, the report written here can be re-loaded
    * by `readRecentReflections()` on a future session so the agent
@@ -61,6 +76,8 @@ export class DefaultIntrospectionLayer implements IntrospectionLayer {
   private registry: ModelRegistry;
   private modelId: string | null;
   private reflectEvery: number;
+  /** v0.6: may this layer spend an LLM call? See DefaultLayerConfig. */
+  private llmEnabled: boolean;
   /** v3.9.1: optional JSONL path for persisting reports. */
   private persistencePath: string | null;
 
@@ -68,7 +85,13 @@ export class DefaultIntrospectionLayer implements IntrospectionLayer {
     this.registry = cfg.registry;
     this.modelId = cfg.modelId ?? null;
     this.reflectEvery = cfg.reflectEvery ?? REFLECT_EVERY;
+    this.llmEnabled = cfg.enabled !== false;
     this.persistencePath = cfg.persistencePath ?? null;
+  }
+
+  /** True when the layer is allowed to make model calls. */
+  get isEnabled(): boolean {
+    return this.llmEnabled;
   }
 
   async registerGoal(goal: Goal): Promise<void> {
@@ -108,11 +131,20 @@ export class DefaultIntrospectionLayer implements IntrospectionLayer {
       // Fire-and-forget: the agent doesn't wait for reflection to
       // complete its current turn. The next call to getGuidance()
       // will block on the in-flight promise.
-      void this.reflect();
+      //
+      // Gated on `llmEnabled`, not on a huge `reflectEvery`: the
+      // counter keeps running either way, so switching it on takes
+      // effect on the next boundary rather than after N more turns
+      // of silence.
+      if (this.llmEnabled) void this.reflect();
     }
   }
 
   async reflect(): Promise<ReflectionReport | null> {
+    // An explicit call is an explicit request, so it is allowed even
+    // when the automatic cadence is off. The guard above is about
+    // spending tokens the user never agreed to, not about refusing
+    // to work.
     if (this.snapshots.length === 0) return null;
     const model = this.resolveModel();
     if (!model) return null;

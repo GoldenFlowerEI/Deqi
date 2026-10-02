@@ -1,4 +1,4 @@
-export { SessionManager } from './session.js';
+export { SessionManager, deqiHome } from './session.js';
 export {
   BUILTIN_TOOLS,
   getBuiltinTool,
