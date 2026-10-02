@@ -35,6 +35,7 @@ import { ScheduleView } from './components/ScheduleView';
 import { SettingsView } from './components/SettingsView';
 import { MobileView } from './components/MobileView';
 import { FeedbackView } from './components/FeedbackView';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 interface ProjectInfo {
   id: string;
@@ -411,28 +412,37 @@ export function App() {
   }
 
   return (
-    <div className="app-v2">
-      <LeftRail
-        view={state.view}
-        onView={setView}
-        onNewTask={handleNewTask}
-        projects={state.projects}
-        activeProjectId={state.activeProjectId}
-        onSelectProject={handleSelectProject}
-        onPinProject={() => { /* TODO: persist pinned projects */ }}
-        recentSessions={state.sessions.slice(0, 8).map((s) => ({
-          id: s.id,
-          shortId: s.id.length > 6 ? s.id.slice(-6) : s.id,
-          model: s.model,
-          projectName: projectNameFromCwd(s.cwd),
-        }))}
-        activeSessionId={state.activeSessionId}
-        onOpenSession={handleOpenSession}
-      />
-      <main className="main-v2">
-        {viewEl}
-      </main>
-    </div>
+    // v0.5: the app-level boundary. Chat blocks have their own, so
+    // this only fires for something structural — but a structural
+    // crash currently means a white window with an error the user
+    // cannot see, which is the worst possible outcome.
+    <ErrorBoundary
+      label="Deqi hit an error it could not recover from."
+      resetKey={state.view}
+    >
+      <div className="app-v2">
+        <LeftRail
+          view={state.view}
+          onView={setView}
+          onNewTask={handleNewTask}
+          projects={state.projects}
+          activeProjectId={state.activeProjectId}
+          onSelectProject={handleSelectProject}
+          onPinProject={() => { /* TODO: persist pinned projects */ }}
+          recentSessions={state.sessions.slice(0, 8).map((s) => ({
+            id: s.id,
+            shortId: s.id.length > 6 ? s.id.slice(-6) : s.id,
+            model: s.model,
+            projectName: projectNameFromCwd(s.cwd),
+          }))}
+          activeSessionId={state.activeSessionId}
+          onOpenSession={handleOpenSession}
+        />
+        <main className="main-v2">
+          {viewEl}
+        </main>
+      </div>
+    </ErrorBoundary>
   );
 }
 

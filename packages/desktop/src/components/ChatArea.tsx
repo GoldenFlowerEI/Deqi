@@ -22,6 +22,7 @@ import type { SessionEvent, MoralFindingWire } from '../lib/types';
 import { Markdown } from './Markdown';
 import { summarizeToolInput } from '../lib/tool-input';
 import { DiffView } from './DiffView';
+import { BlockBoundary } from './ErrorBoundary';
 
 interface ChatAreaProps {
   events: SessionEvent[];
@@ -93,7 +94,14 @@ export function ChatArea({ events, userPrompts, busy }: ChatAreaProps) {
   return (
     <div className="chat-area" ref={scrollRef}>
       {blocks.map((b, i) => (
-        <BlockView key={i} block={b} />
+        // v0.5: per-block boundary. The event stream is untrusted
+        // input — it comes off a socket, from a model, describing tool
+        // arguments. One malformed block used to blank the whole
+        // conversation, including the messages above it that were
+        // perfectly fine.
+        <BlockBoundary key={i} label={`A message could not be displayed (${b.kind}).`}>
+          <BlockView block={b} />
+        </BlockBoundary>
       ))}
       {busy && <div className="busy">● working…</div>}
     </div>
